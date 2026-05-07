@@ -1681,7 +1681,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         list.Save(fullpath) ? print("Saved command list to: " + fullpath) : print("Failed to save command list to: " + fullpath);
         RestoreBaseInputs(simManager, false);
         SaveBestInputs(simManager, false);
-        SetConsoleWindowTitle("BfV2 - " + current.title  + " | Restarts: " + restartCount + " | restarting...");
+        SetConsoleWindowTitle(BFEvaluationResponse.ResultFileStartContent);
         print("Restarting Bruteforce for reasons: ");
         if (r1)
             print("- Reached max iterations before restart: " + restartIterations);
@@ -1809,9 +1809,9 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         if (elapsedSeconds > 0)
         {
             float iterPerSec = info.Iterations / elapsedSeconds;
-            SetConsoleWindowTitle("BfV2 - " + current.title + " | Restarts: " + restartCount + " | Iterations: " + info.Iterations + " | Iterations/second: " + Text::FormatFloat(iterPerSec, "", 0, 2));
+            SetConsoleWindowTitle(BFEvaluationResponse.ResultFileStartContent + " | Iterations: " + info.Iterations + " | Iterations/second: " + Text::FormatFloat(iterPerSec, "", 0, 2));
         }else{
-            SetConsoleWindowTitle("BfV2 - " + current.title + " | Restarts: " + restartCount + " | Iterations: " + info.Iterations);
+            SetConsoleWindowTitle(BFEvaluationResponse.ResultFileStartContent + " | Iterations: " + info.Iterations);
         }
     }
     // Mid-BF hot-swap: detect target change
