@@ -139,25 +139,17 @@ namespace StandardTriggerBf
             entryDetected = false;
         }
         lastRaceTime = raceTime;
-        if (raceTime < triggerCheckMinTime)
-            return resp;
         vec3 carPos = simManager.Dyna.CurrentState.Location.Position;
         if (!entryDetected)
         {
             bool inTrigger = targetTrigger.ContainsPoint(carPos);
-            if (inTrigger)
+            bool prevInTrigger = prevTickValid && targetTrigger.ContainsPoint(prevTickPos);
+            if (raceTime >= triggerCheckMinTime && inTrigger && !prevInTrigger)
             {
                 entryDetected = true;
                 entryTick = raceTime;
                 speedAtEntry = simManager.Dyna.CurrentState.LinearSpeed.Length();
-                if (prevTickValid)
-                {
-                    distBeforeEntry = targetTrigger.Distance(prevTickPos);
-                }
-                else
-                {
-                    distBeforeEntry = targetTrigger.Distance(carPos);
-                }
+                distBeforeEntry = prevTickValid ? targetTrigger.Distance(prevTickPos) : targetTrigger.Distance(carPos);
             }
             prevTickPos = carPos;
             prevTickValid = true;

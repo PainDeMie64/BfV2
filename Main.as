@@ -61,7 +61,6 @@ void Main()
     RegisterVariable("bf_range_max_input_count", 1);
     RegisterVariable("bf_range_min_steer", -65536);
     RegisterVariable("bf_range_max_steer", 65536);
-    RegisterVariable("bf_range_min_time_diff", 0);
     RegisterVariable("bf_range_max_time_diff", 0);
     RegisterVariable("bf_range_fill_steer", false);
     RegisterVariable("bf_adv_steer_modify_count", 0);

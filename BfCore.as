@@ -337,7 +337,6 @@ void BruteforceV2Settings()
             RegisterVariable("bf_range_max_input_count" + varSuffix, 1);
             RegisterVariable("bf_range_min_steer" + varSuffix, -65536);
             RegisterVariable("bf_range_max_steer" + varSuffix, 65536);
-            RegisterVariable("bf_range_min_time_diff" + varSuffix, 0);
             RegisterVariable("bf_range_max_time_diff" + varSuffix, 0);
             RegisterVariable("bf_range_fill_steer" + varSuffix, false);
             RegisterVariable("bf_adv_steer_modify_count" + varSuffix, 0);

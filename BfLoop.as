@@ -812,6 +812,7 @@ void InitializeInputModAlgorithms()
         RegisterInputModAlgorithm("advanced_range", "Advanced Range", AdvancedRangeAlgorithm_Mutate, AdvancedRangeAlgorithm_RenderUI);
         RegisterInputModAlgorithm("smooth_steering", "Smooth Steering", SmoothSteering_Mutate, SmoothSteering_RenderUI);
         RegisterInputModAlgorithm("relative_basic", "Relative Basic", RelativeBasicAlgorithm_Mutate, BasicAlgorithm_RenderUI, true);
+        RegisterInputModAlgorithm("relative_range", "Relative Range", RelativeRangeAlgorithm_Mutate, RangeAlgorithm_RenderUI, true);
     }
 }
 void FillMissingSteerInputs(TM::InputEventBuffer@ buffer, int minTime, int maxTime)
@@ -989,7 +990,6 @@ void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
     int maxInputCount = int(GetVariableDouble("bf_range_max_input_count" + varSuffix));
     int minSteer = int(GetVariableDouble("bf_range_min_steer" + varSuffix));
     int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
-    int minTimeDiff = int(GetVariableDouble("bf_range_min_time_diff" + varSuffix));
     int maxTimeDiff = int(GetVariableDouble("bf_range_max_time_diff" + varSuffix));
     bool fillInputs = GetVariableBool("bf_range_fill_steer" + varSuffix);
     InputModification::MutateInputsRange(
@@ -1000,7 +1000,26 @@ void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
         settings.maxInputsTime,
         minSteer,
         maxSteer,
-        minTimeDiff,
+        maxTimeDiff,
+        fillInputs);
+}
+void RelativeRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    int minInputCount = int(GetVariableDouble("bf_range_min_input_count" + varSuffix));
+    int maxInputCount = int(GetVariableDouble("bf_range_max_input_count" + varSuffix));
+    int minSteer = int(GetVariableDouble("bf_range_min_steer" + varSuffix));
+    int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
+    int maxTimeDiff = int(GetVariableDouble("bf_range_max_time_diff" + varSuffix));
+    bool fillInputs = GetVariableBool("bf_range_fill_steer" + varSuffix);
+    InputModification::MutateRelativeInputsRange(
+        buffer,
+        minInputCount,
+        maxInputCount,
+        settings.minInputsTime,
+        settings.maxInputsTime,
+        minSteer,
+        maxSteer,
         maxTimeDiff,
         fillInputs);
 }
@@ -1071,41 +1090,17 @@ void RangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsI
         UI::PopItemWidth();
         UI::EndTable();
     }
-    toolTip(300, {"Steering will be set to a random value between min and max.", 
-                  "Valid range is [-65536, 65536].", 
-                  "This OVERWRITES the existing steering value."});
+    toolTip(300, {"Range picks steering from min to max.",
+                  "Relative Range uses this as the target and clamp range.",
+                  "Valid range is [-65536, 65536]."});
     int minSteer = int(GetVariableDouble("bf_range_min_steer" + varSuffix));
     int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
     if (minSteer < -65536) SetVariable("bf_range_min_steer" + varSuffix, -65536);
     if (maxSteer > 65536) SetVariable("bf_range_max_steer" + varSuffix, 65536);
     if (minSteer > maxSteer) SetVariable("bf_range_min_steer" + varSuffix, maxSteer);
     UI::Dummy(vec2(0, 2));
-    if (UI::BeginTable("##time_diff_range" + suffix, 1))
-    {
-        UI::TableNextRow();
-        UI::TableSetColumnIndex(0);
-        UI::Text("Time Difference Range");
-        UI::Text("Min");
-        UI::SameLine();
-        UI::Dummy(vec2(117, 0));
-        UI::SameLine();
-        UI::Text("Max");
-        UI::Dummy(vec2(110, 0));
-        UI::SameLine();
-        UI::PushItemWidth(182);
-        UI::InputTimeVar("##bf_range_max_time_diff" + suffix, "bf_range_max_time_diff" + varSuffix);
-        UI::SameLine();
-        UI::Dummy(vec2(-355, 0));
-        UI::SameLine();
-        UI::PushItemWidth(182);
-        UI::InputTimeVar("##bf_range_min_time_diff" + suffix, "bf_range_min_time_diff" + varSuffix);
-        UI::PopItemWidth();
-        UI::SameLine();
-        UI::PopItemWidth();
-        UI::EndTable();
-    }
-    toolTip(300, {"Time offset will be randomly chosen between min and max.", 
-                  "Can be negative (shift earlier) or positive (shift later)."});
+    UI::InputTimeVar("Maximum Time Difference" + suffix, "bf_range_max_time_diff" + varSuffix);
+    toolTip(300, {"Time offset will be randomly chosen between negative and positive max time difference."});
     UI::Dummy(vec2(0, 2));
     UI::CheckboxVar("Fill Missing Steering Input" + suffix, "bf_range_fill_steer" + varSuffix);
     toolTip(300, {"Timestamps with no steering input changes will be filled with existing values "
@@ -1201,7 +1196,6 @@ void AddInputModificationSettings()
         SetVariable("bf_range_max_input_count" + newSuffix, GetVariableDouble("bf_range_max_input_count" + lastSuffix));
         SetVariable("bf_range_min_steer" + newSuffix, GetVariableDouble("bf_range_min_steer" + lastSuffix));
         SetVariable("bf_range_max_steer" + newSuffix, GetVariableDouble("bf_range_max_steer" + lastSuffix));
-        SetVariable("bf_range_min_time_diff" + newSuffix, GetVariableDouble("bf_range_min_time_diff" + lastSuffix));
         SetVariable("bf_range_max_time_diff" + newSuffix, GetVariableDouble("bf_range_max_time_diff" + lastSuffix));
         SetVariable("bf_range_fill_steer" + newSuffix, GetVariableBool("bf_range_fill_steer" + lastSuffix));
         SetVariable("bf_adv_steer_modify_count" + newSuffix, GetVariableDouble("bf_adv_steer_modify_count" + lastSuffix));
@@ -1269,7 +1263,6 @@ void RemoveInputModificationSettings(uint index)
             SetVariable("bf_range_max_input_count" + dstSuffix, GetVariableDouble("bf_range_max_input_count" + srcSuffix));
             SetVariable("bf_range_min_steer" + dstSuffix, GetVariableDouble("bf_range_min_steer" + srcSuffix));
             SetVariable("bf_range_max_steer" + dstSuffix, GetVariableDouble("bf_range_max_steer" + srcSuffix));
-            SetVariable("bf_range_min_time_diff" + dstSuffix, GetVariableDouble("bf_range_min_time_diff" + srcSuffix));
             SetVariable("bf_range_max_time_diff" + dstSuffix, GetVariableDouble("bf_range_max_time_diff" + srcSuffix));
             SetVariable("bf_range_fill_steer" + dstSuffix, GetVariableBool("bf_range_fill_steer" + srcSuffix));
             SetVariable("bf_adv_steer_modify_count" + dstSuffix, GetVariableDouble("bf_adv_steer_modify_count" + srcSuffix));
@@ -1341,7 +1334,7 @@ int GetInputModEffectiveMinTime(InputModificationSettings @settings, uint settin
     string varSuffix = GetInputModVarSuffix(settingsIndex);
     int minTime = 1000000000;
 
-    if (algo.identifier == "basic" || algo.identifier == "range" || algo.identifier == "relative_basic")
+    if (algo.identifier == "basic" || algo.identifier == "range" || algo.identifier == "relative_basic" || algo.identifier == "relative_range")
     {
         return settings.minInputsTime;
     }
@@ -1604,19 +1597,18 @@ void OnSimulationBegin(SimulationManager @simManager)
         string algoName = (algo !is null) ? algo.name : "Unknown";
         print(" - Input Modification #" + (im + 1) + enabledStr + " (" + algoName + "):");
         string varSuffix = GetInputModVarSuffix(im);
-        if (algo !is null && algo.identifier == "range")
+        if (algo !is null && (algo.identifier == "range" || algo.identifier == "relative_range"))
         {
             int minInputCount = int(GetVariableDouble("bf_range_min_input_count" + varSuffix));
             int maxInputCount = int(GetVariableDouble("bf_range_max_input_count" + varSuffix));
             int minSteer = int(GetVariableDouble("bf_range_min_steer" + varSuffix));
             int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
-            int minTimeDiff = int(GetVariableDouble("bf_range_min_time_diff" + varSuffix));
             int maxTimeDiff = int(GetVariableDouble("bf_range_max_time_diff" + varSuffix));
             bool fillInputs = GetVariableBool("bf_range_fill_steer" + varSuffix);
             print("   - Input Count Range: " + minInputCount + " to " + maxInputCount);
             print("   - Time Frame: From " + Time::Format(settings.minInputsTime) + " to " + Time::Format(settings.maxInputsTime));
             print("   - Steering Value Range: " + minSteer + " to " + maxSteer);
-            print("   - Time Diff Range: " + Time::Format(minTimeDiff) + " to " + Time::Format(maxTimeDiff));
+            print("   - Max Time Diff: " + Time::Format(maxTimeDiff));
             print("   - Fill Steer: " + (fillInputs ? "Yes" : "No"));
         }
         else if (algo !is null && algo.identifier == "advanced_basic")

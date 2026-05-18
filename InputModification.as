@@ -11,6 +11,40 @@ namespace InputModification
             return 65536;
         return value;
     }
+    int ClampSteerToRange(int value, int minSteer, int maxSteer)
+    {
+        value = ClampSteer(value);
+        if (value < minSteer)
+            return minSteer;
+        if (value > maxSteer)
+            return maxSteer;
+        return value;
+    }
+    int GetPreviousTickSteer(TM::InputEventBuffer @buffer, int selectedIndex, int finalAbsTime)
+    {
+        if (buffer is null)
+            return 0;
+        int previousTickAbsTime = finalAbsTime - 10;
+        int previousSteer = 0;
+        int previousSteerTime = -1;
+        for (uint i = 0; i < buffer.Length; i++)
+        {
+            if (int(i) == selectedIndex)
+                continue;
+            auto evt = buffer[i];
+            if (evt.Value.EventIndex != buffer.EventIndices.SteerId)
+                continue;
+            int evtTime = int(evt.Time);
+            if (evtTime > previousTickAbsTime)
+                continue;
+            if (evtTime >= previousSteerTime)
+            {
+                previousSteer = int(evt.Value.Analog);
+                previousSteerTime = evtTime;
+            }
+        }
+        return previousSteer;
+    }
     void ApplyRelativeSteerDeltaFrom(TM::InputEventBuffer @buffer, int selectedIndex, int fromAbsTime, int delta)
     {
         if (buffer is null || delta == 0)
@@ -25,6 +59,21 @@ namespace InputModification
             if (int(evt.Time) < fromAbsTime)
                 continue;
             evt.Value.Analog = ClampSteer(int(evt.Value.Analog) + delta);
+            buffer[i] = evt;
+        }
+    }
+    void ApplyRelativeSteerDeltaFromRange(TM::InputEventBuffer @buffer, int fromAbsTime, int delta, int minSteer, int maxSteer)
+    {
+        if (buffer is null)
+            return;
+        for (uint i = 0; i < buffer.Length; i++)
+        {
+            auto evt = buffer[i];
+            if (evt.Value.EventIndex != buffer.EventIndices.SteerId)
+                continue;
+            if (int(evt.Time) < fromAbsTime)
+                continue;
+            evt.Value.Analog = ClampSteerToRange(int(evt.Value.Analog) + delta, minSteer, maxSteer);
             buffer[i] = evt;
         }
     }
@@ -232,7 +281,7 @@ namespace InputModification
         }
         SortBufferManual(buffer, cachedStartIndex);
     }
-    void MutateInputsRange(TM::InputEventBuffer @buffer, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int minTimeDiff, int maxTimeDiff, bool fillInputs)
+    void MutateInputsRange(TM::InputEventBuffer @buffer, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int maxTimeDiff, bool fillInputs)
     { 
         if (buffer is null)
             return;
@@ -285,12 +334,8 @@ namespace InputModification
         int actualInputCount = Math::Rand(minInputCount, maxInputCount);
         if (actualInputCount > int(indices.Length))
             actualInputCount = int(indices.Length);
-        if (minTimeDiff > maxTimeDiff)
-        {
-            int tmp = minTimeDiff;
-            minTimeDiff = maxTimeDiff;
-            maxTimeDiff = tmp;
-        }
+        if (maxTimeDiff < 0)
+            maxTimeDiff = -maxTimeDiff;
         if (minSteer > maxSteer)
         {
             int tmp = minSteer;
@@ -299,7 +344,7 @@ namespace InputModification
         }
         for (int i = 0; i < actualInputCount; i++)
         {
-            int timeOffset = Math::Rand(minTimeDiff / 10, maxTimeDiff / 10) * 10;
+            int timeOffset = Math::Rand(-maxTimeDiff / 10, maxTimeDiff / 10) * 10;
             int newSteerValue = Math::Rand(minSteer, maxSteer);
             uint selectedIdx = uint(Math::Rand(0, int(indices.Length) - 1));
             int inputIdx = indices[selectedIdx];
@@ -334,6 +379,108 @@ namespace InputModification
             int newRaceTime = int(evt.Time) - 100010;
             g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
+        }
+        SortBufferManual(buffer, cachedStartIndex);
+    }
+    void MutateRelativeInputsRange(TM::InputEventBuffer @buffer, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int maxTimeDiff, bool fillInputs)
+    {
+        if (buffer is null)
+            return;
+        if (maxTime <= 0)
+            return;
+        if (fillInputs)
+        {
+            uint lenBefore = buffer.Length;
+            FillInputs(buffer, maxTime, cachedStartIndex);
+            if (buffer.Length != lenBefore)
+                cachedStartIndex = -1;
+        }
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
+        if (minInputCount > maxInputCount)
+        {
+            int tmp = minInputCount;
+            minInputCount = maxInputCount;
+            maxInputCount = tmp;
+        }
+        if (minInputCount < 1) minInputCount = 1;
+        if (maxInputCount < 1) maxInputCount = 1;
+        if (maxInputCount < minInputCount) maxInputCount = minInputCount;
+        if (maxTimeDiff < 0)
+            maxTimeDiff = -maxTimeDiff;
+        if (minSteer > maxSteer)
+        {
+            int tmp = minSteer;
+            minSteer = maxSteer;
+            maxSteer = tmp;
+        }
+        minSteer = ClampSteer(minSteer);
+        maxSteer = ClampSteer(maxSteer);
+
+        array<int> indices;
+        uint start = 0;
+        if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
+        {
+            start = cachedStartIndex;
+        }
+        for (uint i = start; i < buffer.Length; i++)
+        {
+            auto evt = buffer[i];
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                cachedStartIndex = i;
+                continue;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+                break;
+            indices.Add(i);
+        }
+        if (indices.Length == 0)
+        {
+            print("No inputs found in the specified time frame to modify.", Severity::Warning);
+            return;
+        }
+        int actualInputCount = Math::Rand(minInputCount, maxInputCount);
+        if (actualInputCount > int(indices.Length))
+            actualInputCount = int(indices.Length);
+        for (int i = 0; i < actualInputCount; i++)
+        {
+            int timeOffset = Math::Rand(-maxTimeDiff / 10, maxTimeDiff / 10) * 10;
+            int pickedAbsoluteSteer = Math::Rand(minSteer, maxSteer);
+            uint selectedIdx = uint(Math::Rand(0, int(indices.Length) - 1));
+            int inputIdx = indices[selectedIdx];
+            indices.RemoveAt(selectedIdx);
+            auto evt = buffer[inputIdx];
+            int origRaceTime = int(evt.Time) - 100010;
+            evt.Time += timeOffset;
+            if (evt.Time < 100010)
+            {
+                evt.Time = 100010;
+            }
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                evt.Time = 100010 + minTime;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+            {
+                evt.Time = 100010 + maxTime;
+            }
+            int newRaceTime = int(evt.Time) - 100010;
+            if (evt.Value.EventIndex == buffer.EventIndices.SteerId)
+            {
+                int previousTickSteer = GetPreviousTickSteer(buffer, inputIdx, int(evt.Time));
+                int appliedDelta = pickedAbsoluteSteer - previousTickSteer;
+                buffer[inputIdx] = evt;
+                ApplyRelativeSteerDeltaFromRange(buffer, int(evt.Time), appliedDelta, minSteer, maxSteer);
+            }
+            else
+            {
+                buffer[inputIdx] = evt;
+            }
+            g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
         }
         SortBufferManual(buffer, cachedStartIndex);
     }

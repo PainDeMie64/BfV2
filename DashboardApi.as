@@ -265,7 +265,6 @@ void EnsureSlotVariablesRegistered(int slotCount)
         RegisterVariable("bf_range_max_input_count" + vs, 1);
         RegisterVariable("bf_range_min_steer" + vs, -65536);
         RegisterVariable("bf_range_max_steer" + vs, 65536);
-        RegisterVariable("bf_range_min_time_diff" + vs, 0);
         RegisterVariable("bf_range_max_time_diff" + vs, 0);
         RegisterVariable("bf_range_fill_steer" + vs, false);
         RegisterVariable("bf_adv_steer_modify_count" + vs, 0);
@@ -383,7 +382,6 @@ string HandleGetAllSettings(const string &in body)
         slots += "," + JsonInt("maxTime", int(GetVariableDouble("bf_inputs_max_time" + vs)));
         slots += "," + JsonInt("minSteer", int(GetVariableDouble("bf_range_min_steer" + vs)));
         slots += "," + JsonInt("maxSteer", int(GetVariableDouble("bf_range_max_steer" + vs)));
-        slots += "," + JsonInt("minTimeDiff", int(GetVariableDouble("bf_range_min_time_diff" + vs)));
         slots += "," + JsonInt("maxTimeDiff", int(GetVariableDouble("bf_range_max_time_diff" + vs)));
         slots += "," + JsonBool("fillSteer", GetVariableBool("bf_range_fill_steer" + vs));
         slots += "}";
