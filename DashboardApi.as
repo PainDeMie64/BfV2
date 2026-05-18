@@ -72,6 +72,7 @@ string HandleGetBfSettings(const string &in body)
     json += "," + JsonInt("restartAfter", int(GetVariableDouble("bf_iterations_before_restart")));
     json += "," + JsonString("resultFolder", GetVariableString("bf_result_folder"));
     json += "," + JsonString("resultFilename", GetVariableString("bf_result_filename"));
+    json += "," + JsonBool("relativeSteeringEnabled", GetVariableBool("bf_relative_steering_enabled"));
 
     int slotCount = int(GetVariableDouble("bf_input_mod_count"));
     if (slotCount < 1) slotCount = 1;
@@ -81,8 +82,10 @@ string HandleGetBfSettings(const string &in body)
         if (s > 0) slots += ",";
         string suffix = GetInputModVarSuffix(uint(s));
         string algoName = GetVariableString("bf_input_mod_algorithm" + suffix);
+        string relativeAlgoName = GetVariableString("bf_relative_input_mod_algorithm" + suffix);
         bool enabled = (s == 0) ? true : GetVariableBool("bf_input_mod_enabled" + suffix);
         slots += "{" + JsonString("algorithm", algoName);
+        slots += "," + JsonString("relativeAlgorithm", relativeAlgoName);
         slots += "," + JsonBool("enabled", enabled);
         slots += "," + JsonInt("modifyCount", int(GetVariableDouble("bf_modify_count" + suffix)));
         slots += "," + JsonInt("minTime", int(GetVariableDouble("bf_inputs_min_time" + suffix)));
@@ -257,6 +260,7 @@ void EnsureSlotVariablesRegistered(int slotCount)
         RegisterVariable("bf_inputs_fill_steer" + vs, false);
         RegisterVariable("bf_input_mod_enabled" + vs, true);
         RegisterVariable("bf_input_mod_algorithm" + vs, "basic");
+        RegisterVariable("bf_relative_input_mod_algorithm" + vs, "relative_basic");
         RegisterVariable("bf_range_min_input_count" + vs, 1);
         RegisterVariable("bf_range_max_input_count" + vs, 1);
         RegisterVariable("bf_range_min_steer" + vs, -65536);
@@ -345,6 +349,7 @@ string HandleGetAllSettings(const string &in body)
 
     // Slots (slotCount already set above)
     json += "," + JsonInt("slotCount", slotCount);
+    json += "," + JsonBool("relativeSteeringEnabled", GetVariableBool("bf_relative_steering_enabled"));
 
     string slots = "[";
     for (int s = 0; s < slotCount; s++)
@@ -352,11 +357,13 @@ string HandleGetAllSettings(const string &in body)
         if (s > 0) slots += ",";
         string vs = GetInputModVarSuffix(uint(s));
         string algoId = GetVariableString("bf_input_mod_algorithm" + vs);
+        string relativeAlgoId = GetVariableString("bf_relative_input_mod_algorithm" + vs);
         bool enabled = (s == 0) ? true : GetVariableBool("bf_input_mod_enabled" + vs);
 
         slots += "{";
         slots += JsonBool("enabled", enabled);
         slots += "," + JsonString("algorithm", algoId);
+        slots += "," + JsonString("relativeAlgorithm", relativeAlgoId);
 
         // Basic settings
         slots += ",\"basic\":{";
@@ -586,7 +593,8 @@ string HandleGetAllSettings(const string &in body)
     {
         if (i > 0) algos += ",";
         algos += "{" + JsonString("id", g_inputModAlgorithms[i].identifier);
-        algos += "," + JsonString("name", g_inputModAlgorithms[i].name) + "}";
+        algos += "," + JsonString("name", g_inputModAlgorithms[i].name);
+        algos += "," + JsonBool("relativeOnly", g_inputModAlgorithms[i].relativeOnly) + "}";
     }
     algos += "]";
     json += ",\"algorithms\":" + algos;

@@ -302,6 +302,9 @@ void BruteforceV2Settings()
         UI::Dummy(vec2(0, 2));
     }
     UI::Dummy(vec2(0, 3));
+    UI::CheckboxVar("Use Relative Steering Algorithms", "bf_relative_steering_enabled");
+    toolTip(300, {"When enabled, input modification algorithms use relative steering behavior."});
+    UI::Dummy(vec2(0, 3));
     UI::Separator();
     UI::Dummy(vec2(0, 3));
     InitializeInputModAlgorithms();
@@ -329,6 +332,7 @@ void BruteforceV2Settings()
             RegisterVariable("bf_inputs_fill_steer" + varSuffix, false);
             RegisterVariable("bf_input_mod_enabled" + varSuffix, true);
             RegisterVariable("bf_input_mod_algorithm" + varSuffix, "basic");
+            RegisterVariable("bf_relative_input_mod_algorithm" + varSuffix, "relative_basic");
             RegisterVariable("bf_range_min_input_count" + varSuffix, 1);
             RegisterVariable("bf_range_max_input_count" + varSuffix, 1);
             RegisterVariable("bf_range_min_steer" + varSuffix, -65536);
@@ -383,9 +387,10 @@ void BruteforceV2Settings()
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
         string varSuffix = GetInputModVarSuffix(im);
-        string savedAlgoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
-        if (savedAlgoId == "") savedAlgoId = "basic";
-        g_inputModSettings[im].algorithmIndex = GetInputModAlgorithmIndex(savedAlgoId);
+        bool relativeMode = GetVariableBool("bf_relative_steering_enabled");
+        string savedAlgoId = GetInputModActiveAlgorithmId(varSuffix, relativeMode);
+        g_inputModSettings[im].relativeSteeringEnabled = relativeMode;
+        g_inputModSettings[im].algorithmIndex = GetInputModAlgorithmIndexForMode(savedAlgoId, relativeMode);
     }
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
@@ -421,16 +426,21 @@ void BruteforceV2Settings()
             InputModificationSettings @settings = g_inputModSettings[im];
             InputModificationAlgorithm @currentAlgo = settings.GetAlgorithm();
             string currentAlgoName = (currentAlgo !is null) ? currentAlgo.name : "Unknown";
+            bool relativeMode = GetVariableBool("bf_relative_steering_enabled");
+            string algorithmVar = GetInputModAlgorithmVarName(varSuffix, relativeMode);
             if (UI::BeginCombo("Algorithm" + suffix, currentAlgoName))
             {
                 for (uint algoIdx = 0; algoIdx < g_inputModAlgorithms.Length; algoIdx++)
                 {
                     InputModificationAlgorithm @algo = g_inputModAlgorithms[algoIdx];
+                    if (algo.relativeOnly != relativeMode)
+                        continue;
                     bool isSelected = (settings.algorithmIndex == int(algoIdx));
                     if (UI::Selectable(algo.name, isSelected))
                     {
                         settings.algorithmIndex = int(algoIdx);
-                        SetVariable("bf_input_mod_algorithm" + varSuffix, algo.identifier);
+                        settings.relativeSteeringEnabled = relativeMode;
+                        SetVariable(algorithmVar, algo.identifier);
                     }
                 }
                 UI::EndCombo();

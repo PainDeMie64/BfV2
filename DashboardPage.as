@@ -92,6 +92,8 @@ string HandleBfDashboard(const string &in body)
     h += "<div class='field-row full'><label>Condition Script</label><textarea id='condScript' data-var='bf_condition_script' data-script='1' rows='3'></textarea></div>";
     h += "</div></details>";
 
+    h += "<div class='chk-row'><input type='checkbox' id='relativeSteeringMode' data-var='bf_relative_steering_enabled'><label for='relativeSteeringMode'>Use relative steering algorithms</label></div>";
+
     // Input Modification section
     h += "<details id='secInputMod'>";
     h += "<summary>Input Modification <button class='propagate-btn' data-section='secInputMod' onclick='event.stopPropagation();propagateSection(this.dataset.section)'>Propagate to all</button></summary>";
@@ -418,7 +420,8 @@ string BfDashJS_Helpers()
     j += "for (var i=0; i<keys.length; i++) {";
     j += "if (keys[i].indexOf('bf_modify') === 0 || keys[i].indexOf('bf_inputs') === 0 ||";
     j += "keys[i].indexOf('bf_max_') === 0 || keys[i].indexOf('bf_range') === 0 ||";
-    j += "keys[i].indexOf('bf_adv') === 0 || keys[i].indexOf('bf_input_mod') === 0 || keys[i].indexOf('don_bf_') === 0) {";
+    j += "keys[i].indexOf('bf_adv') === 0 || keys[i].indexOf('bf_input_mod') === 0 ||";
+    j += "keys[i].indexOf('bf_relative_input_mod') === 0 || keys[i].indexOf('don_bf_') === 0) {";
     j += "var row = document.querySelector('[data-var=\"'+keys[i]+'\"]');";
     j += "if (row) { var r2 = row.closest('.field-row')||row.closest('.chk-row'); if(r2) r2.classList.remove('dirty'); }";
     j += "delete dirtyVars[keys[i]];}}";
@@ -544,6 +547,15 @@ string BfDashJS_Helpers()
     j += "var sel=document.createElement('select');sel.setAttribute('data-var',varName);";
     j += "for(var i=0;i<options.length;i++){var o=document.createElement('option');o.value=options[i].value;o.textContent=options[i].text;sel.appendChild(o);}";
     j += "sel.addEventListener('change',function(){setVar(varName,this.value);});return sel;}";
+
+    j += "function displayRelativeMode(cfg){";
+    j += "if('bf_relative_steering_enabled' in dirtyVars){var v=dirtyVars['bf_relative_steering_enabled'];return v==='true'||v==='1'||v===true;}";
+    j += "return !!(cfg&&cfg.relativeSteeringEnabled);}";
+
+    j += "function slotDisplayAlgorithm(cfg,slot,si,relativeMode){";
+    j += "var vs=si===0?'':'_'+si;var vn=(relativeMode?'bf_relative_input_mod_algorithm':'bf_input_mod_algorithm')+vs;";
+    j += "if(vn in dirtyVars)return dirtyVars[vn];";
+    j += "return relativeMode?(slot.relativeAlgorithm||'relative_basic'):(slot.algorithm||'basic');}";
 
     // Create a range input
     j += "function mkRange(varName,min,max,step){";
@@ -1522,6 +1534,7 @@ string BfDashJS_Settings()
     j += "function buildSlots(cfg){";
     j += "var c=document.getElementById('slotsContainer');while(c.firstChild)c.removeChild(c.firstChild);";
     j += "var slots=cfg.slots||[];var algos=cfg.algorithms||[];";
+    j += "var relativeMode=displayRelativeMode(cfg);";
     j += "for(var si=0;si<slots.length;si++){";
     j += "(function(si){";
     j += "var s=slots[si];var card=document.createElement('div');card.className='slot-card';";
@@ -1538,8 +1551,13 @@ string BfDashJS_Settings()
     j += "hdr.appendChild(enChk);}";
     // Algorithm select
     j += "var vs=si===0?'':'_'+si;";
-    j += "var algoOpts=[];for(var ai=0;ai<algos.length;ai++){algoOpts.push({value:algos[ai].id,text:algos[ai].name});}";
-    j += "var algoSel=mkSelect('bf_input_mod_algorithm'+vs,algoOpts);algoSel.value=s.algorithm;";
+    j += "var activeAlgo=slotDisplayAlgorithm(cfg,s,si,relativeMode);";
+    j += "var algoVar=(relativeMode?'bf_relative_input_mod_algorithm':'bf_input_mod_algorithm')+vs;";
+    j += "var algoOpts=[];for(var ai=0;ai<algos.length;ai++){if(!!algos[ai].relativeOnly===relativeMode)algoOpts.push({value:algos[ai].id,text:algos[ai].name});}";
+    j += "if(algoOpts.length===0)algoOpts.push({value:relativeMode?'relative_basic':'basic',text:relativeMode?'Relative Basic':'Basic'});";
+    j += "var hasActive=false;for(var oi=0;oi<algoOpts.length;oi++){if(algoOpts[oi].value===activeAlgo)hasActive=true;}";
+    j += "if(!hasActive)activeAlgo=algoOpts[0].value;";
+    j += "var algoSel=mkSelect(algoVar,algoOpts);algoSel.value=activeAlgo;";
     j += "algoSel.style.maxWidth='140px';hdr.appendChild(algoSel);";
     // Remove button for non-first slots
     j += "if(si>0){var rmBtn=document.createElement('button');rmBtn.className='btn-sm btn-danger';rmBtn.textContent='Remove';";
@@ -1549,7 +1567,7 @@ string BfDashJS_Settings()
 
     // Slot body
     j += "var body=document.createElement('div');body.className='slot-body';body.setAttribute('data-slot',si);";
-    j += "buildAlgoFields(body,s,si,s.algorithm);";
+    j += "buildAlgoFields(body,s,si,activeAlgo);";
     j += "card.appendChild(body);c.appendChild(card);";
     j += "})(si);}";
     j += "}";
@@ -1559,7 +1577,7 @@ string BfDashJS_Settings()
     j += "var vs=si===0?'':'_'+si;";
 
     // basic
-    j += "if(algoId==='basic'){";
+    j += "if(algoId==='basic'||algoId==='relative_basic'){";
     j += "body.appendChild(mkFieldRow('Input Modify Count',mkNum('bf_modify_count'+vs,0)));";
     j += "body.appendChild(mkFieldRow('Time From',mkTime('bf_inputs_min_time'+vs)));";
     j += "body.appendChild(mkFieldRow('Time To',mkTime('bf_inputs_max_time'+vs)));";
@@ -1631,6 +1649,7 @@ string BfDashJS_Settings()
     // Update all slot field values from config
     j += "function updateSlotValues(cfg){";
     j += "var slots=cfg.slots||[];";
+    j += "var relativeMode=displayRelativeMode(cfg);";
     j += "for(var si=0;si<slots.length;si++){";
     j += "var s=slots[si];var vs=si===0?'':'_'+si;";
 
@@ -1649,8 +1668,9 @@ string BfDashJS_Settings()
     // Update enabled checkbox and algo select in header
     j += "if(si>0){var enEl=document.querySelector('.slot-hdr input[data-var=\"bf_input_mod_enabled'+vs+'\"]');";
     j += "if(enEl)setField(enEl,s.enabled);}";
-    j += "var algoEl=document.querySelector('.slot-hdr select[data-var=\"bf_input_mod_algorithm'+vs+'\"]');";
-    j += "if(algoEl&&!isFocused(algoEl))algoEl.value=s.algorithm;";
+    j += "var algoVar=(relativeMode?'bf_relative_input_mod_algorithm':'bf_input_mod_algorithm')+vs;";
+    j += "var algoEl=document.querySelector('.slot-hdr select[data-var=\"'+algoVar+'\"]');";
+    j += "if(algoEl&&!isFocused(algoEl))algoEl.value=slotDisplayAlgorithm(cfg,s,si,relativeMode);";
 
     j += "}}";
 
@@ -1735,6 +1755,7 @@ string BfDashJS_Settings()
     // Build serverSnapshot from polled config
     j += "serverSnapshot={};";
     j += "serverSnapshot['bf_target']=String(cfg.target);";
+    j += "serverSnapshot['bf_relative_steering_enabled']=String(!!cfg.relativeSteeringEnabled);";
     j += "if(cfg.behavior){";
     j += "serverSnapshot['bf_result_filename']=String(cfg.behavior.resultFilename);";
     j += "serverSnapshot['bf_iterations_before_restart']=String(cfg.behavior.iterationsBeforeRestart);";
@@ -1752,6 +1773,7 @@ string BfDashJS_Settings()
     j += "else serverSnapshot[ek[ei]]=String(ev);}}";
     j += "if(cfg.slots){for(var si=0;si<cfg.slots.length;si++){var sl=cfg.slots[si];var vs=si===0?'':'_'+si;";
     j += "serverSnapshot['bf_input_mod_algorithm'+vs]=sl.algorithm;";
+    j += "serverSnapshot['bf_relative_input_mod_algorithm'+vs]=sl.relativeAlgorithm;";
     j += "if(si>0)serverSnapshot['bf_input_mod_enabled'+vs]=String(sl.enabled);";
     j += "var algos=['basic','range','advanced_basic','advanced_range','smooth_steering'];";
     j += "for(var ai=0;ai<algos.length;ai++){var ao=sl[algos[ai]];if(!ao)continue;var ak=Object.keys(ao);";
@@ -1808,9 +1830,12 @@ string BfDashJS_Settings()
 
     j += "var condScript=document.getElementById('condScript');";
     j += "if(!isFocused(condScript))condScript.value=scriptToDisplay(cfg.conditions.conditionScript);";
+    j += "var relMode=displayRelativeMode(cfg);";
+    j += "var relChk=document.getElementById('relativeSteeringMode');";
+    j += "if(relChk&&!isFocused(relChk))relChk.checked=relMode;";
 
     // Build/rebuild slots if count or algorithms changed
-    j += "var slotAlgos='';for(var i=0;i<cfg.slots.length;i++)slotAlgos+=cfg.slots[i].algorithm+',';";
+    j += "var slotAlgos=(relMode?'rel:':'abs:');for(var i=0;i<cfg.slots.length;i++)slotAlgos+=slotDisplayAlgorithm(cfg,cfg.slots[i],i,relMode)+',';";
     j += "if(cfg.slots.length!==lastSlotCount||slotAlgos!==prevSlotAlgos){lastSlotCount=cfg.slots.length;prevSlotAlgos=slotAlgos;buildSlots(cfg);}";
     j += "updateSlotValues(cfg);";
 
@@ -1828,6 +1853,7 @@ string BfDashJS_Settings()
     j += "document.getElementById('condCps').addEventListener('blur',function(){setVar('bf_condition_cps',this.value);});";
     j += "document.getElementById('condTrigger').addEventListener('change',function(){setVar('bf_condition_trigger',this.value);});";
     j += "document.getElementById('condScript').addEventListener('blur',function(){setVar('bf_condition_script',displayToScript(this.value));});";
+    j += "document.getElementById('relativeSteeringMode').addEventListener('change',function(){setVar('bf_relative_steering_enabled',this.checked?'true':'false');prevSlotAlgos='';if(allCfg)buildSlots(allCfg);if(!bfIsRunning)setTimeout(pollSettings,100);});";
 
     // Add Slot button
     j += "document.getElementById('btnAddSlot').addEventListener('click',function(){postAction('/api/bf/add-slot','');});";

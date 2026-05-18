@@ -54,7 +54,9 @@ void Main()
     RegisterVariable("bf_restart_condition_script_height", 26);
     RegisterVariable("bf_condition_trigger", 0);
     RegisterVariable("bf_input_mod_count", 1);
+    RegisterVariable("bf_relative_steering_enabled", false);
     RegisterVariable("bf_input_mod_algorithm", "basic");
+    RegisterVariable("bf_relative_input_mod_algorithm", "relative_basic");
     RegisterVariable("bf_range_min_input_count", 1);
     RegisterVariable("bf_range_max_input_count", 1);
     RegisterVariable("bf_range_min_steer", -65536);

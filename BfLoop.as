@@ -207,35 +207,7 @@ void RefreshInputModSettings(SimulationManager@ simManager)
     {
         string varSuffix = GetInputModVarSuffix(im);
         InputModificationSettings @s = g_inputModSettings[im];
-        s.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
-        s.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
-        s.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
-        s.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
-        s.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
-        s.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
-        s.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
-        s.maxInputsTime = ResolveMaxTime(s.maxInputsTime, int(simManager.EventsDuration));
-        string algoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
-        s.algorithmIndex = GetInputModAlgorithmIndex(algoId);
-        int ed = int(simManager.EventsDuration);
-        if (algoId == "advanced_basic")
-        {
-            if (int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix)) == 0)
-                SetVariable("bf_adv_steer_max_time" + varSuffix, ed);
-            if (int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix)) == 0)
-                SetVariable("bf_adv_accel_max_time" + varSuffix, ed);
-            if (int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix)) == 0)
-                SetVariable("bf_adv_brake_max_time" + varSuffix, ed);
-        }
-        else if (algoId == "advanced_range")
-        {
-            if (int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix)) == 0)
-                SetVariable("bf_advr_steer_max_time" + varSuffix, ed);
-            if (int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix)) == 0)
-                SetVariable("bf_advr_accel_max_time" + varSuffix, ed);
-            if (int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix)) == 0)
-                SetVariable("bf_advr_brake_max_time" + varSuffix, ed);
-        }
+        ReadInputModificationSettings(s, im, simManager);
     }
     if (g_inputModSettings.Length > 0)
     {
@@ -253,13 +225,15 @@ class InputModificationAlgorithm
 {
     string identifier;
     string name;
+    bool relativeOnly = false;
     InputModAlgorithmCallback @mutateCallback;
     InputModAlgorithmUICallback @renderUICallback;
     InputModificationAlgorithm() {}
-    InputModificationAlgorithm(const string &in id, const string &in displayName, InputModAlgorithmCallback @mutate, InputModAlgorithmUICallback @renderUI)
+    InputModificationAlgorithm(const string &in id, const string &in displayName, InputModAlgorithmCallback @mutate, InputModAlgorithmUICallback @renderUI, bool onlyRelative)
     {
         identifier = id;
         name = displayName;
+        relativeOnly = onlyRelative;
         @mutateCallback = @mutate;
         @renderUICallback = @renderUI;
     }
@@ -267,7 +241,11 @@ class InputModificationAlgorithm
 array<InputModificationAlgorithm@> g_inputModAlgorithms;
 void RegisterInputModAlgorithm(const string &in identifier, const string &in name, InputModAlgorithmCallback @mutateCallback, InputModAlgorithmUICallback @renderUICallback)
 {
-    InputModificationAlgorithm @algo = InputModificationAlgorithm(identifier, name, mutateCallback, renderUICallback);
+    RegisterInputModAlgorithm(identifier, name, mutateCallback, renderUICallback, false);
+}
+void RegisterInputModAlgorithm(const string &in identifier, const string &in name, InputModAlgorithmCallback @mutateCallback, InputModAlgorithmUICallback @renderUICallback, bool relativeOnly)
+{
+    InputModificationAlgorithm @algo = InputModificationAlgorithm(identifier, name, mutateCallback, renderUICallback, relativeOnly);
     g_inputModAlgorithms.Add(algo);
 }
 int GetInputModAlgorithmIndex(const string &in identifier)
@@ -278,6 +256,36 @@ int GetInputModAlgorithmIndex(const string &in identifier)
             return int(i);
     }
     return 0; 
+}
+string GetInputModDefaultAlgorithmId(bool relativeMode)
+{
+    return relativeMode ? "relative_basic" : "basic";
+}
+string GetInputModAlgorithmVarName(const string &in varSuffix, bool relativeMode)
+{
+    return (relativeMode ? "bf_relative_input_mod_algorithm" : "bf_input_mod_algorithm") + varSuffix;
+}
+string GetInputModActiveAlgorithmId(const string &in varSuffix, bool relativeMode)
+{
+    string algoId = GetVariableString(GetInputModAlgorithmVarName(varSuffix, relativeMode));
+    if (algoId == "")
+        algoId = GetInputModDefaultAlgorithmId(relativeMode);
+    return algoId;
+}
+int GetInputModAlgorithmIndexForMode(const string &in identifier, bool relativeMode)
+{
+    for (uint i = 0; i < g_inputModAlgorithms.Length; i++)
+    {
+        if (g_inputModAlgorithms[i].identifier == identifier && g_inputModAlgorithms[i].relativeOnly == relativeMode)
+            return int(i);
+    }
+    string fallback = GetInputModDefaultAlgorithmId(relativeMode);
+    for (uint i = 0; i < g_inputModAlgorithms.Length; i++)
+    {
+        if (g_inputModAlgorithms[i].identifier == fallback && g_inputModAlgorithms[i].relativeOnly == relativeMode)
+            return int(i);
+    }
+    return 0;
 }
 InputModificationAlgorithm@ GetInputModAlgorithm(int index)
 {
@@ -301,6 +309,17 @@ InputModificationAlgorithm@ GetInputModAlgorithmByIdentifier(const string &in id
 void BasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
     InputModification::MutateInputs(
+        buffer,
+        settings.inputCount,
+        settings.minInputsTime,
+        settings.maxInputsTime,
+        settings.maxSteerDiff,
+        settings.maxTimeDiff,
+        settings.fillSteerInputs);
+}
+void RelativeBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    InputModification::MutateRelativeInputs(
         buffer,
         settings.inputCount,
         settings.minInputsTime,
@@ -792,6 +811,7 @@ void InitializeInputModAlgorithms()
         RegisterInputModAlgorithm("advanced_basic", "Advanced Basic", AdvancedBasicAlgorithm_Mutate, AdvancedBasicAlgorithm_RenderUI);
         RegisterInputModAlgorithm("advanced_range", "Advanced Range", AdvancedRangeAlgorithm_Mutate, AdvancedRangeAlgorithm_RenderUI);
         RegisterInputModAlgorithm("smooth_steering", "Smooth Steering", SmoothSteering_Mutate, SmoothSteering_RenderUI);
+        RegisterInputModAlgorithm("relative_basic", "Relative Basic", RelativeBasicAlgorithm_Mutate, BasicAlgorithm_RenderUI, true);
     }
 }
 void FillMissingSteerInputs(TM::InputEventBuffer@ buffer, int minTime, int maxTime)
@@ -1101,6 +1121,7 @@ class InputModificationSettings
     int maxTimeDiff = 0;
     bool fillSteerInputs = false;
     int algorithmIndex = 0; 
+    bool relativeSteeringEnabled = false;
     InputModificationSettings() {}
     InputModificationSettings(int count, int minTime, int maxTime, int steerDiff, int timeDiff, bool fill)
     {
@@ -1111,6 +1132,7 @@ class InputModificationSettings
         maxTimeDiff = timeDiff;
         fillSteerInputs = fill;
         algorithmIndex = 0;
+        relativeSteeringEnabled = false;
     }
     InputModificationAlgorithm@ GetAlgorithm()
     {
@@ -1118,6 +1140,47 @@ class InputModificationSettings
     }
 }
 array<InputModificationSettings@> g_inputModSettings;
+void FixAdvancedInputModMaxTimes(const string &in varSuffix, const string &in algoId, int eventsDuration)
+{
+    if (algoId == "advanced_basic")
+    {
+        if (int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix)) == 0)
+            SetVariable("bf_adv_steer_max_time" + varSuffix, eventsDuration);
+        if (int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix)) == 0)
+            SetVariable("bf_adv_accel_max_time" + varSuffix, eventsDuration);
+        if (int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix)) == 0)
+            SetVariable("bf_adv_brake_max_time" + varSuffix, eventsDuration);
+    }
+    else if (algoId == "advanced_range")
+    {
+        if (int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix)) == 0)
+            SetVariable("bf_advr_steer_max_time" + varSuffix, eventsDuration);
+        if (int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix)) == 0)
+            SetVariable("bf_advr_accel_max_time" + varSuffix, eventsDuration);
+        if (int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix)) == 0)
+            SetVariable("bf_advr_brake_max_time" + varSuffix, eventsDuration);
+    }
+}
+void ReadInputModificationSettings(InputModificationSettings @settings, uint settingsIndex, SimulationManager@ simManager)
+{
+    if (settings is null || simManager is null)
+        return;
+
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    bool relativeMode = GetVariableBool("bf_relative_steering_enabled");
+    string algoId = GetInputModActiveAlgorithmId(varSuffix, relativeMode);
+
+    settings.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
+    settings.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
+    settings.maxInputsTime = ResolveMaxTime(int(GetVariableDouble("bf_inputs_max_time" + varSuffix)), int(simManager.EventsDuration));
+    settings.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
+    settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
+    settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
+    settings.enabled = (settingsIndex == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
+    settings.relativeSteeringEnabled = relativeMode;
+    settings.algorithmIndex = GetInputModAlgorithmIndexForMode(algoId, relativeMode);
+    FixAdvancedInputModMaxTimes(varSuffix, algoId, int(simManager.EventsDuration));
+}
 void AddInputModificationSettings()
 {
     InputModificationSettings @settings = InputModificationSettings();
@@ -1133,6 +1196,7 @@ void AddInputModificationSettings()
         SetVariable("bf_max_time_diff" + newSuffix, GetVariableDouble("bf_max_time_diff" + lastSuffix));
         SetVariable("bf_inputs_fill_steer" + newSuffix, GetVariableBool("bf_inputs_fill_steer" + lastSuffix));
         SetVariable("bf_input_mod_algorithm" + newSuffix, GetVariableString("bf_input_mod_algorithm" + lastSuffix));
+        SetVariable("bf_relative_input_mod_algorithm" + newSuffix, GetVariableString("bf_relative_input_mod_algorithm" + lastSuffix));
         SetVariable("bf_range_min_input_count" + newSuffix, GetVariableDouble("bf_range_min_input_count" + lastSuffix));
         SetVariable("bf_range_max_input_count" + newSuffix, GetVariableDouble("bf_range_max_input_count" + lastSuffix));
         SetVariable("bf_range_min_steer" + newSuffix, GetVariableDouble("bf_range_min_steer" + lastSuffix));
@@ -1200,6 +1264,7 @@ void RemoveInputModificationSettings(uint index)
             SetVariable("bf_max_time_diff" + dstSuffix, GetVariableDouble("bf_max_time_diff" + srcSuffix));
             SetVariable("bf_inputs_fill_steer" + dstSuffix, GetVariableBool("bf_inputs_fill_steer" + srcSuffix));
             SetVariable("bf_input_mod_algorithm" + dstSuffix, GetVariableString("bf_input_mod_algorithm" + srcSuffix));
+            SetVariable("bf_relative_input_mod_algorithm" + dstSuffix, GetVariableString("bf_relative_input_mod_algorithm" + srcSuffix));
             SetVariable("bf_range_min_input_count" + dstSuffix, GetVariableDouble("bf_range_min_input_count" + srcSuffix));
             SetVariable("bf_range_max_input_count" + dstSuffix, GetVariableDouble("bf_range_max_input_count" + srcSuffix));
             SetVariable("bf_range_min_steer" + dstSuffix, GetVariableDouble("bf_range_min_steer" + srcSuffix));
@@ -1276,7 +1341,7 @@ int GetInputModEffectiveMinTime(InputModificationSettings @settings, uint settin
     string varSuffix = GetInputModVarSuffix(settingsIndex);
     int minTime = 1000000000;
 
-    if (algo.identifier == "basic" || algo.identifier == "range")
+    if (algo.identifier == "basic" || algo.identifier == "range" || algo.identifier == "relative_basic")
     {
         return settings.minInputsTime;
     }
@@ -1500,40 +1565,8 @@ void OnSimulationBegin(SimulationManager @simManager)
     }
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
-        string varSuffix = GetInputModVarSuffix(im);
         InputModificationSettings @settings = g_inputModSettings[im];
-        settings.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
-        settings.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
-        settings.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
-        settings.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
-        settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
-        settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
-        settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
-        string savedAlgoId = GetVariableString("bf_input_mod_algorithm" + varSuffix);
-        if (savedAlgoId == "") savedAlgoId = "basic";
-        settings.algorithmIndex = GetInputModAlgorithmIndex(savedAlgoId);
-        settings.maxInputsTime = ResolveMaxTime(settings.maxInputsTime, int(simManager.EventsDuration));
-        // Fix maxTime==0 for advanced algorithm variables
-        string algoId_fix = GetVariableString("bf_input_mod_algorithm" + varSuffix);
-        int ed = int(simManager.EventsDuration);
-        if (algoId_fix == "advanced_basic")
-        {
-            if (int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix)) == 0)
-                SetVariable("bf_adv_steer_max_time" + varSuffix, ed);
-            if (int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix)) == 0)
-                SetVariable("bf_adv_accel_max_time" + varSuffix, ed);
-            if (int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix)) == 0)
-                SetVariable("bf_adv_brake_max_time" + varSuffix, ed);
-        }
-        else if (algoId_fix == "advanced_range")
-        {
-            if (int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix)) == 0)
-                SetVariable("bf_advr_steer_max_time" + varSuffix, ed);
-            if (int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix)) == 0)
-                SetVariable("bf_advr_accel_max_time" + varSuffix, ed);
-            if (int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix)) == 0)
-                SetVariable("bf_advr_brake_max_time" + varSuffix, ed);
-        }
+        ReadInputModificationSettings(settings, im, simManager);
     }
     if (g_inputModSettings.Length > 0)
     {
@@ -1562,6 +1595,7 @@ void OnSimulationBegin(SimulationManager @simManager)
     resultFolder = GetVariableString("bf_result_folder");
     print("Bruteforce V2 started with settings:");
     print(" - Target: " + current.title);
+    print(" - Relative Steering Algorithms: " + (GetVariableBool("bf_relative_steering_enabled") ? "Enabled" : "Disabled"));
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
         InputModificationSettings @settings = g_inputModSettings[im];
@@ -1723,37 +1757,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         }
         for (uint im = 0; im < g_inputModSettings.Length; im++)
         {
-            string varSuffix = GetInputModVarSuffix(im);
             InputModificationSettings @settings = g_inputModSettings[im];
-            settings.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
-            settings.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
-            settings.maxInputsTime = int(GetVariableDouble("bf_inputs_max_time" + varSuffix));
-            settings.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
-            settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
-            settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
-            settings.enabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
-            settings.maxInputsTime = ResolveMaxTime(settings.maxInputsTime, int(simManager.EventsDuration));
-            string algoId_fix = GetVariableString("bf_input_mod_algorithm" + varSuffix);
-            settings.algorithmIndex = GetInputModAlgorithmIndex(algoId_fix);
-            int ed = int(simManager.EventsDuration);
-            if (algoId_fix == "advanced_basic")
-            {
-                if (int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix)) == 0)
-                    SetVariable("bf_adv_steer_max_time" + varSuffix, ed);
-                if (int(GetVariableDouble("bf_adv_accel_max_time" + varSuffix)) == 0)
-                    SetVariable("bf_adv_accel_max_time" + varSuffix, ed);
-                if (int(GetVariableDouble("bf_adv_brake_max_time" + varSuffix)) == 0)
-                    SetVariable("bf_adv_brake_max_time" + varSuffix, ed);
-            }
-            else if (algoId_fix == "advanced_range")
-            {
-                if (int(GetVariableDouble("bf_advr_steer_max_time" + varSuffix)) == 0)
-                    SetVariable("bf_advr_steer_max_time" + varSuffix, ed);
-                if (int(GetVariableDouble("bf_advr_accel_max_time" + varSuffix)) == 0)
-                    SetVariable("bf_advr_accel_max_time" + varSuffix, ed);
-                if (int(GetVariableDouble("bf_advr_brake_max_time" + varSuffix)) == 0)
-                    SetVariable("bf_advr_brake_max_time" + varSuffix, ed);
-            }
+            ReadInputModificationSettings(settings, im, simManager);
         }
         if (g_inputModSettings.Length > 0)
         {
@@ -1857,10 +1862,13 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             int newMaxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
             bool newFill = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
             bool newEnabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
-            int newAlgoIdx = GetInputModAlgorithmIndex(GetVariableString("bf_input_mod_algorithm" + varSuffix));
+            bool newRelativeMode = GetVariableBool("bf_relative_steering_enabled");
+            string newAlgoId = GetInputModActiveAlgorithmId(varSuffix, newRelativeMode);
+            int newAlgoIdx = GetInputModAlgorithmIndexForMode(newAlgoId, newRelativeMode);
             if (s.inputCount != newInputCount || s.minInputsTime != newMinTime || s.maxInputsTime != newMaxTime
                 || s.maxSteerDiff != newMaxSteerDiff || s.maxTimeDiff != newMaxTimeDiff
-                || s.fillSteerInputs != newFill || s.enabled != newEnabled || s.algorithmIndex != newAlgoIdx)
+                || s.fillSteerInputs != newFill || s.enabled != newEnabled || s.algorithmIndex != newAlgoIdx
+                || s.relativeSteeringEnabled != newRelativeMode)
                 settingsChanged = true;
             s.inputCount = newInputCount;
             s.minInputsTime = newMinTime;
@@ -1870,6 +1878,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             s.fillSteerInputs = newFill;
             s.enabled = newEnabled;
             s.algorithmIndex = newAlgoIdx;
+            s.relativeSteeringEnabled = newRelativeMode;
+            FixAdvancedInputModMaxTimes(varSuffix, newAlgoId, int(simManager.EventsDuration));
         }
         if (g_inputModSettings.Length > 0)
         {

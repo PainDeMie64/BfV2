@@ -3,6 +3,31 @@ namespace InputModification
     int cachedStartIndex = -1;
     int cachedMinTime = -1;
     int g_earliestMutationTime = 2147483647;
+    int ClampSteer(int value)
+    {
+        if (value < -65536)
+            return -65536;
+        if (value > 65536)
+            return 65536;
+        return value;
+    }
+    void ApplyRelativeSteerDeltaFrom(TM::InputEventBuffer @buffer, int selectedIndex, int fromAbsTime, int delta)
+    {
+        if (buffer is null || delta == 0)
+            return;
+        for (uint i = 0; i < buffer.Length; i++)
+        {
+            if (int(i) == selectedIndex)
+                continue;
+            auto evt = buffer[i];
+            if (evt.Value.EventIndex != buffer.EventIndices.SteerId)
+                continue;
+            if (int(evt.Time) < fromAbsTime)
+                continue;
+            evt.Value.Analog = ClampSteer(int(evt.Value.Analog) + delta);
+            buffer[i] = evt;
+        }
+    }
     void SortBufferManual(TM::InputEventBuffer @buffer, int startIndex = -1)
     {
         if (buffer is null || buffer.Length < 2)
@@ -36,7 +61,7 @@ namespace InputModification
         }
     }
     void MutateInputs(TM::InputEventBuffer @buffer, int inputCount, int minTime, int maxTime, int maxSteerDiff, int maxTimeDiff, bool fillInputs)
-    { 
+    {
         if (buffer is null)
             return;
         if (maxTime <= 0)
@@ -53,7 +78,6 @@ namespace InputModification
             cachedMinTime = minTime;
             cachedStartIndex = -1;
         }
-        int actualInputCount = Math::Rand(1, inputCount);
         array<int> indices;
         uint start = 0;
         if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
@@ -68,20 +92,27 @@ namespace InputModification
                 cachedStartIndex = i;
                 continue;
             }
-            indices.Add(i);
             if (int(evt.Time) - 100010 > maxTime)
                 break;
+            indices.Add(i);
         }
         if (indices.Length == 0)
         {
             print("No inputs found in the specified time frame to modify.", Severity::Warning);
             return;
         }
+        if (inputCount < 1)
+            return;
+        int actualInputCount = Math::Rand(1, inputCount);
+        if (actualInputCount > int(indices.Length))
+            actualInputCount = int(indices.Length);
         for (int i = 0; i < actualInputCount; i++)
         {
             int timeOffset = Math::Rand(-maxTimeDiff / 10, maxTimeDiff / 10) * 10;
             int steerOffset = Math::Rand(-maxSteerDiff, maxSteerDiff);
-            int inputIdx = indices[Math::Rand(0, indices.Length - 1)];
+            uint selectedIdx = uint(Math::Rand(0, int(indices.Length) - 1));
+            int inputIdx = indices[selectedIdx];
+            indices.RemoveAt(selectedIdx);
             auto evt = buffer[inputIdx];
             evt.Time += timeOffset;
             if (evt.Time < 100010)
@@ -115,6 +146,92 @@ namespace InputModification
         }
         SortBufferManual(buffer, cachedStartIndex);
     }
+    void MutateRelativeInputs(TM::InputEventBuffer @buffer, int inputCount, int minTime, int maxTime, int maxSteerDiff, int maxTimeDiff, bool fillInputs)
+    {
+        if (buffer is null)
+            return;
+        if (maxTime <= 0)
+            return;
+        if (fillInputs)
+        {
+            uint lenBefore = buffer.Length;
+            FillInputs(buffer, maxTime, cachedStartIndex);
+            if (buffer.Length != lenBefore)
+                cachedStartIndex = -1;
+        }
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
+        array<int> indices;
+        uint start = 0;
+        if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
+        {
+            start = cachedStartIndex;
+        }
+        for (uint i = start; i < buffer.Length; i++)
+        {
+            auto evt = buffer[i];
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                cachedStartIndex = i;
+                continue;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+                break;
+            indices.Add(i);
+        }
+        if (indices.Length == 0)
+        {
+            print("No inputs found in the specified time frame to modify.", Severity::Warning);
+            return;
+        }
+        if (inputCount < 1)
+            return;
+        int actualInputCount = Math::Rand(1, inputCount);
+        if (actualInputCount > int(indices.Length))
+            actualInputCount = int(indices.Length);
+        for (int i = 0; i < actualInputCount; i++)
+        {
+            int timeOffset = Math::Rand(-maxTimeDiff / 10, maxTimeDiff / 10) * 10;
+            int steerOffset = Math::Rand(-maxSteerDiff, maxSteerDiff);
+            uint selectedIdx = uint(Math::Rand(0, int(indices.Length) - 1));
+            int inputIdx = indices[selectedIdx];
+            indices.RemoveAt(selectedIdx);
+            auto evt = buffer[inputIdx];
+            int origRaceTime = int(evt.Time) - 100010;
+            evt.Time += timeOffset;
+            if (evt.Time < 100010)
+            {
+                evt.Time = 100010;
+            }
+            if (int(evt.Time) - 100010 < minTime)
+            {
+                evt.Time = 100010 + minTime;
+            }
+            if (int(evt.Time) - 100010 > maxTime)
+            {
+                evt.Time = 100010 + maxTime;
+            }
+            int newRaceTime = int(evt.Time) - 100010;
+            if (evt.Value.EventIndex == buffer.EventIndices.SteerId)
+            {
+                int oldSteer = int(buffer[inputIdx].Value.Analog);
+                int newSteer = ClampSteer(oldSteer + steerOffset);
+                int appliedDelta = newSteer - oldSteer;
+                evt.Value.Analog = newSteer;
+                buffer[inputIdx] = evt;
+                ApplyRelativeSteerDeltaFrom(buffer, inputIdx, int(evt.Time), appliedDelta);
+            }
+            else
+            {
+                buffer[inputIdx] = evt;
+            }
+            g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
+        }
+        SortBufferManual(buffer, cachedStartIndex);
+    }
     void MutateInputsRange(TM::InputEventBuffer @buffer, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int minTimeDiff, int maxTimeDiff, bool fillInputs)
     { 
         if (buffer is null)
@@ -140,7 +257,8 @@ namespace InputModification
             maxInputCount = tmp;
         }
         if (minInputCount < 1) minInputCount = 1;
-        int actualInputCount = Math::Rand(minInputCount, maxInputCount);
+        if (maxInputCount < 1) maxInputCount = 1;
+        if (maxInputCount < minInputCount) maxInputCount = minInputCount;
         array<int> indices;
         uint start = 0;
         if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
@@ -155,15 +273,18 @@ namespace InputModification
                 cachedStartIndex = i;
                 continue;
             }
-            indices.Add(i);
             if (int(evt.Time) - 100010 > maxTime)
                 break;
+            indices.Add(i);
         }
         if (indices.Length == 0)
         {
             print("No inputs found in the specified time frame to modify.", Severity::Warning);
             return;
         }
+        int actualInputCount = Math::Rand(minInputCount, maxInputCount);
+        if (actualInputCount > int(indices.Length))
+            actualInputCount = int(indices.Length);
         if (minTimeDiff > maxTimeDiff)
         {
             int tmp = minTimeDiff;
@@ -180,7 +301,9 @@ namespace InputModification
         {
             int timeOffset = Math::Rand(minTimeDiff / 10, maxTimeDiff / 10) * 10;
             int newSteerValue = Math::Rand(minSteer, maxSteer);
-            int inputIdx = indices[Math::Rand(0, indices.Length - 1)];
+            uint selectedIdx = uint(Math::Rand(0, int(indices.Length) - 1));
+            int inputIdx = indices[selectedIdx];
+            indices.RemoveAt(selectedIdx);
             auto evt = buffer[inputIdx];
             evt.Time += timeOffset;
             if (evt.Time < 100010)
@@ -300,7 +423,6 @@ namespace InputModification
             cachedMinTime = minTime;
             cachedStartIndex = -1;
         }
-        int actualInputCount = Math::Rand(1, inputCount);
         array<int> indices;
         uint start = 0;
         if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
@@ -325,10 +447,17 @@ namespace InputModification
         }
         if (indices.Length == 0)
             return;
+        if (inputCount < 1)
+            return;
+        int actualInputCount = Math::Rand(1, inputCount);
+        if (actualInputCount > int(indices.Length))
+            actualInputCount = int(indices.Length);
         for (int i = 0; i < actualInputCount; i++)
         {
             int timeOffset = Math::Rand(-maxTimeDiff / 10, maxTimeDiff / 10) * 10;
-            int inputIdx = indices[Math::Rand(0, indices.Length - 1)];
+            uint selectedIdx = uint(Math::Rand(0, int(indices.Length) - 1));
+            int inputIdx = indices[selectedIdx];
+            indices.RemoveAt(selectedIdx);
             auto evt = buffer[inputIdx];
             evt.Time += timeOffset;
             if (evt.Time < 100010)
@@ -392,7 +521,8 @@ namespace InputModification
             maxInputCount = tmp;
         }
         if (minInputCount < 1) minInputCount = 1;
-        int actualInputCount = Math::Rand(minInputCount, maxInputCount);
+        if (maxInputCount < 1) maxInputCount = 1;
+        if (maxInputCount < minInputCount) maxInputCount = minInputCount;
         array<int> indices;
         uint start = 0;
         if (cachedStartIndex != -1 && cachedStartIndex < int(buffer.Length))
@@ -417,6 +547,9 @@ namespace InputModification
         }
         if (indices.Length == 0)
             return;
+        int actualInputCount = Math::Rand(minInputCount, maxInputCount);
+        if (actualInputCount > int(indices.Length))
+            actualInputCount = int(indices.Length);
         if (minTimeDiff > maxTimeDiff)
         {
             int tmp = minTimeDiff;
@@ -432,7 +565,9 @@ namespace InputModification
         for (int i = 0; i < actualInputCount; i++)
         {
             int timeOffset = Math::Rand(minTimeDiff / 10, maxTimeDiff / 10) * 10;
-            int inputIdx = indices[Math::Rand(0, indices.Length - 1)];
+            uint selectedIdx = uint(Math::Rand(0, int(indices.Length) - 1));
+            int inputIdx = indices[selectedIdx];
+            indices.RemoveAt(selectedIdx);
             auto evt = buffer[inputIdx];
             evt.Time += timeOffset;
             if (evt.Time < 100010)
