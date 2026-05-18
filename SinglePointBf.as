@@ -11,7 +11,6 @@ namespace SinglePointBf
     int currentBestTime = 0;
     bool isRunBetter = false;
     float shiftThreshold = 0.0f;
-    bool shifted = false;
     void RenderEvalSettings()
     {
         if (UI::BeginTable("##ratio_table", 1))
@@ -195,7 +194,7 @@ namespace SinglePointBf
                 {
                     isRunBetter = true;
                 }
-                if (shiftThreshold > 0 && !shifted && d < shiftThreshold)
+                if (shiftThreshold > 0 && d < shiftThreshold)
                 {
                     CommandList shiftSave();
                     shiftSave.Content = simManager.InputEvents.ToCommandsText();
@@ -211,7 +210,6 @@ namespace SinglePointBf
                     bestSpeed = -1.0f;
                     bestTime = 0;
                     base = true;
-                    shifted = true;
                     isRunBetter = false;
                     resp.Decision = BFEvaluationDecision::Accept;
                     return resp;
@@ -287,7 +285,6 @@ namespace SinglePointBf
         distCondition = GetVariableDouble("bf_condition_distance") > 0.0f ? GetVariableDouble("bf_condition_distance") : 1e18f;
         ignoreSameSpeed = GetVariableBool("bf_ignore_same_speed") ? 1 : 0;
         shiftThreshold = float(GetVariableDouble("bf_singlepoint_shift_threshold"));
-        shifted = false;
     }
     float dist()
     {

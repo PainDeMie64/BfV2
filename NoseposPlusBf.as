@@ -178,6 +178,8 @@ namespace NoseposPlusBf
 
     bool AreConditionsMet(SimulationManager@ simManager)
     {
+        if(!GlobalConditionsMet(simManager)) return false;
+
         // Choose a tick to print if a condition failed
         int debugTick = int(GetD("shweetz_debug"));
 

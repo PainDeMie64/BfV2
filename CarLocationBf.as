@@ -456,5 +456,6 @@ namespace CarLocationBf {
         RENDER_INTERVAL_MS = int(1000/GetVariableDouble(id+"_car_render_rate"));
         auto eval = RegisterBruteforceEval(id, "Car Location", OnEvaluate, RenderEvalSettings);
         @eval.onSimBegin = @OnSimulationBegin;
+        @eval.onRender = @Render;
     }
 }
