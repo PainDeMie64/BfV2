@@ -1694,6 +1694,20 @@ array<ConditionKind> conditionIndices;
 array<ConditionKind> unmetConditionIndices;
 array<ms>            unmetConditionTimes;
 
+void ResetRunState()
+{
+    valid = false;
+    met = false;
+
+    scalarIndices.Clear();
+    unmetScalarIndices.Clear();
+    unmetScalarTimes.Clear();
+
+    conditionIndices.Clear();
+    unmetConditionIndices.Clear();
+    unmetConditionTimes.Clear();
+}
+
 
 // ============================================================================
 // Main - BfV2 entry point
@@ -1715,6 +1729,8 @@ void Main()
 
 void OnSimBegin(SimulationManager@)
 {
+    ResetRunState();
+
     customTargetTowards = targetTowards == 0;
     if (isTargetGrouped)
     {
@@ -1971,16 +1987,7 @@ void OnSimBegin(SimulationManager@)
 
 void OnSimEnd(SimulationManager@, SimulationResult)
 {
-    valid = false;
-    met = false;
-
-    scalarIndices.Clear();
-    unmetScalarIndices.Clear();
-    unmetScalarTimes.Clear();
-
-    conditionIndices.Clear();
-    unmetConditionIndices.Clear();
-    unmetConditionTimes.Clear();
+    ResetRunState();
 }
 
 

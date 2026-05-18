@@ -14,6 +14,7 @@ namespace StandardTriggerBf
     float bestSpeedAtEntry = -1.0f;
     float bestDistBeforeEntry = 1e18f;
     int triggerCheckMinTime = 0;
+    int targetTriggerNumber = 1;
     bool isBetter(int time, float dist, float speed)
     {
         if (bestSpeedAtEntry < 0.0f)
@@ -204,13 +205,11 @@ namespace StandardTriggerBf
             }
             if (isBetter(entryTick, distBeforeEntry, speedAtEntry))
             {
-                print("Found better trigger: [time: " + Text::FormatFloat(entryTick / 1000.0, "", 0, 2)
-                    + ", distance: " + Text::FormatFloat(distBeforeEntry, "", 0, 8)
-                    + ", speed: " + Text::FormatFloat(speedAtEntry * 3.6, "", 0, 2) + "km/h]"
-                    + " is better than [time: " + Text::FormatFloat(bestEntryTick / 1000.0, "", 0, 2)
-                    + ", distance: " + Text::FormatFloat(bestDistBeforeEntry, "", 0, 8)
-                    + ", speed: " + Text::FormatFloat(bestSpeedAtEntry * 3.6, "", 0, 2) + "km/h]"
-                    + ", iterations: " + info.Iterations);
+                print("hit trigger " + targetTriggerNumber
+                    + " at " + Text::FormatFloat(entryTick / 1000.0, "", 0, 3)
+                    + ", distance:" + Text::FormatFloat(distBeforeEntry, "", 0, 2)
+                    + ", speed " + Text::FormatFloat(speedAtEntry * 3.6, "", 0, 2) + "km/h"
+                    + ", iter:" + info.Iterations);
                 bestEntryTick = entryTick;
                 bestSpeedAtEntry = speedAtEntry;
                 bestDistBeforeEntry = distBeforeEntry;
@@ -252,6 +251,7 @@ namespace StandardTriggerBf
         if (triggerIds.Length > 0 && triggerIndex < int(triggerIds.Length))
         {
             targetTrigger = GetTrigger(triggerIds[triggerIndex]);
+            targetTriggerNumber = triggerIndex + 1;
         }
         else
         {

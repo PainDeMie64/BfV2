@@ -75,6 +75,7 @@ namespace PreciseTriggerBf
         {
             return resp;
         }
+        float triggerSpeed = simManager.Dyna.CurrentState.LinearSpeed.Length();
         if (!conditionsMetBeforeCompute)
         {
             if (info.Phase == BFPhase::Initial)
@@ -97,9 +98,13 @@ namespace PreciseTriggerBf
                 return resp;
             }
             if (bestTime != -1)
-                print("Precise trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9));
+                print("Precise trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9)
+                    + ", speed " + Text::FormatFloat(triggerSpeed * 3.6, "", 0, 2) + "km/h"
+                    + ", iter:" + info.Iterations);
             else
-                print("Base run trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9));
+                print("Base run trigger time: " + Text::FormatFloat(preciseTime, "", 0, 9)
+                    + ", speed " + Text::FormatFloat(triggerSpeed * 3.6, "", 0, 2) + "km/h"
+                    + ", iter:" + info.Iterations);
             bestTime = preciseTime;
             bestTimeMsImprecise = PreciseFinish::StateBeforeHitTime;
             resp.Decision = BFEvaluationDecision::Accept;
