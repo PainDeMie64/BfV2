@@ -1571,6 +1571,13 @@ void OnSimulationBegin(SimulationManager @simManager)
         fillSteerInputs = g_inputModSettings[0].fillSteerInputs;
     }
     leastMinInputsTime = ComputeLeastInputModMinTime();
+    string standardLines = Replace(GetVariableString("bf_condition_script"), ":", "\n");
+    if (standardLines != linesStandardCondition || standardCondition is null)
+    {
+        linesStandardCondition = standardLines;
+        Scripting::ConditionCallback @callback = Scripting::CompileMulti(standardLines.Split("\n"));
+        @standardCondition = @callback;
+    }
     minSpeed = float(GetVariableDouble("bf_condition_speed")) / 3.6f; 
     minCps = int(GetVariableDouble("bf_condition_cps"));
     int triggerIndex = int(GetVariableDouble("bf_condition_trigger"));
