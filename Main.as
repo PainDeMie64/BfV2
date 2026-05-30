@@ -46,6 +46,7 @@ void Main()
     InitializeInputModAlgorithms();
     RegisterValidationHandler("bfv2", "Bruteforce V2", BruteforceV2Settings);
     RegisterVariable("bf_iterations_before_restart", 0);
+    RegisterVariable("bf_improvement_collection_iterations", 0);
     RegisterVariable("bf_result_folder", "");
     RegisterVariable("bf_dashboard_persist_logs", false);
     RegisterVariable("bf_condition_script", "");

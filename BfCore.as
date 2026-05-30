@@ -70,6 +70,9 @@ void BruteforceV2Settings()
         UI::InputIntVar("Iterations before restart", "bf_iterations_before_restart", 0);
         toolTip(300, {"After this many iterations, the bruteforce process will restart from the beginning, with the base run's inputs. This can help escape local minima. Set to 0 to disable restarts."});
         UI::Dummy(vec2(0, 2));
+        UI::InputIntVar("Improvement collection iterations", "bf_improvement_collection_iterations", 0);
+        toolTip(300, {"When above 0, accepted improvements are collected for this many iterations before the best collected run becomes the new mutation base. Set to 0 to use normal bruteforce behavior."});
+        UI::Dummy(vec2(0, 2));
         UI::InputTextVar("Result files folder", "bf_result_folder");
         toolTip(300, {"Folder where the result files will be saved. Leave empty to use the root folder. Example:",
                       "'results' will save files in " + GetVariableString("scripts_folder") + "\\results\\"});

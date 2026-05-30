@@ -70,6 +70,7 @@ string HandleGetBfSettings(const string &in body)
     string json = "{";
     json += JsonString("target", GetBfTargetTitle());
     json += "," + JsonInt("restartAfter", int(GetVariableDouble("bf_iterations_before_restart")));
+    json += "," + JsonInt("improvementCollectionIterations", GetImprovementCollectionIterationsSetting());
     json += "," + JsonString("resultFolder", GetVariableString("bf_result_folder"));
     json += "," + JsonString("resultFilename", GetVariableString("bf_result_filename"));
     json += "," + JsonBool("relativeSteeringEnabled", GetVariableBool("bf_relative_steering_enabled"));
@@ -333,6 +334,7 @@ string HandleGetAllSettings(const string &in body)
     json += ",\"behavior\":{";
     json += JsonString("resultFilename", GetVariableString("bf_result_filename"));
     json += "," + JsonInt("iterationsBeforeRestart", int(GetVariableDouble("bf_iterations_before_restart")));
+    json += "," + JsonInt("improvementCollectionIterations", GetImprovementCollectionIterationsSetting());
     json += "," + JsonString("resultFolder", GetVariableString("bf_result_folder"));
     json += "," + JsonBool("persistLogs", GetVariableBool("bf_dashboard_persist_logs"));
     json += "," + JsonString("restartConditionScript", GetVariableString("bf_restart_condition_script"));
@@ -647,6 +649,8 @@ string HandlePostSetVar(const string &in body)
     else if (varType == VariableType::Double)
     {
         double dval = Text::ParseFloat(value);
+        if (name == "bf_improvement_collection_iterations" && dval < 0)
+            dval = 0;
         ok = SetVariable(name, dval);
     }
     else if (varType == VariableType::String)
@@ -782,7 +786,12 @@ string HandlePostSetBatch(const string &in body)
         if (found)
         {
             if (varType == VariableType::Double)
-                SetVariable(name, double(Text::ParseFloat(value)));
+            {
+                double dval = Text::ParseFloat(value);
+                if (name == "bf_improvement_collection_iterations" && dval < 0)
+                    dval = 0;
+                SetVariable(name, dval);
+            }
             else if (varType == VariableType::Boolean)
                 SetVariable(name, value == "true" || value == "1");
             else
@@ -823,6 +832,7 @@ string HandleApplyInputs(const string &in body)
     SaveBestInputs(sim);
 
     RefreshInputModSettings(sim);
+    ConfigureImprovementCollection(sim);
 
     info.Iterations = 0;
     info.Phase = BFPhase::Initial;

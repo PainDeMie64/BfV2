@@ -1401,6 +1401,14 @@ array<TM::InputEvent> bestInputEvents;
 bool hasBestInputs = false;
 array<TM::InputEvent> baseInputEvents;
 bool hasBaseInputs = false;
+array<TM::InputEvent> collectionWindowBaseInputEvents;
+bool hasCollectionWindowBaseInputs = false;
+array<TM::InputEvent> collectedBestInputEvents;
+bool hasCollectedBestInputs = false;
+bool collectionModeEnabled = false;
+int improvementCollectionIterations = 0;
+int nextCollectionPromotionIteration = 0;
+bool collectionInitialRunIsCollectedBest = false;
 void SaveBestInputs(SimulationManager @simManager, bool printSaved = false)
 {
     TM::InputEventBuffer @buf = simManager.InputEvents;
@@ -1482,6 +1490,16 @@ SimulationState rewindState;
 bool rewindStateAssigned = false;
 array<SimulationState@> simStateCache;
 array<int> simStateTimes;
+SimulationState collectionWindowRewindState;
+bool collectionWindowRewindStateAssigned = false;
+array<SimulationState@> collectionWindowSimStateCache;
+array<int> collectionWindowSimStateTimes;
+bool hasCollectionWindowSearchState = false;
+SimulationState collectedBestRewindState;
+bool collectedBestRewindStateAssigned = false;
+array<SimulationState@> collectedBestSimStateCache;
+array<int> collectedBestSimStateTimes;
+bool hasCollectedBestSearchState = false;
 SimulationState@ FindNearestCachedState(int earliestMutationTime)
 {
     int target = earliestMutationTime - 10;
@@ -1491,6 +1509,252 @@ SimulationState@ FindNearestCachedState(int earliestMutationTime)
             return simStateCache[i];
     }
     return rewindState;
+}
+int GetImprovementCollectionIterationsSetting()
+{
+    int value = int(GetVariableDouble("bf_improvement_collection_iterations"));
+    if (value < 0)
+    {
+        SetVariable("bf_improvement_collection_iterations", 0);
+        value = 0;
+    }
+    return value;
+}
+bool IsImprovementCollectionSupportedByCurrentTarget()
+{
+    return current !is null && current.type == CallbackType::Legacy && current.identifier != "uberbug_target";
+}
+void ClearCollectedBestState()
+{
+    collectedBestInputEvents.Clear();
+    hasCollectedBestInputs = false;
+    collectedBestSimStateCache.Clear();
+    collectedBestSimStateTimes.Clear();
+    hasCollectedBestSearchState = false;
+    collectedBestRewindStateAssigned = false;
+    collectionInitialRunIsCollectedBest = false;
+}
+void ResetImprovementCollectionRuntime()
+{
+    collectionWindowBaseInputEvents.Clear();
+    hasCollectionWindowBaseInputs = false;
+    collectionWindowSimStateCache.Clear();
+    collectionWindowSimStateTimes.Clear();
+    hasCollectionWindowSearchState = false;
+    collectionWindowRewindStateAssigned = false;
+    ClearCollectedBestState();
+    collectionModeEnabled = false;
+    improvementCollectionIterations = 0;
+    nextCollectionPromotionIteration = 0;
+}
+void SaveCollectionWindowBaseInputs(SimulationManager @simManager)
+{
+    TM::InputEventBuffer @buf = simManager.InputEvents;
+    if (buf is null)
+        return;
+    collectionWindowBaseInputEvents.Clear();
+    for (uint i = 0; i < buf.Length; i++)
+    {
+        auto evt = buf[i];
+        collectionWindowBaseInputEvents.Add(evt);
+    }
+    hasCollectionWindowBaseInputs = true;
+}
+void RestoreCollectionWindowBaseInputs(SimulationManager @simManager)
+{
+    if (!hasCollectionWindowBaseInputs)
+    {
+        RestoreBestInputs(simManager);
+        return;
+    }
+    TM::InputEventBuffer @buf = simManager.InputEvents;
+    if (buf is null)
+        return;
+    buf.Clear();
+    for (uint i = 0; i < collectionWindowBaseInputEvents.Length; i++)
+    {
+        auto evt = collectionWindowBaseInputEvents[i];
+        buf.Add(evt);
+    }
+}
+void SaveCollectedBestInputs(SimulationManager @simManager)
+{
+    TM::InputEventBuffer @buf = simManager.InputEvents;
+    if (buf is null)
+        return;
+    collectedBestInputEvents.Clear();
+    for (uint i = 0; i < buf.Length; i++)
+    {
+        auto evt = buf[i];
+        collectedBestInputEvents.Add(evt);
+    }
+    hasCollectedBestInputs = true;
+}
+void CopyCollectedBestToBestInputs()
+{
+    if (!hasCollectedBestInputs)
+        return;
+    bestInputEvents.Clear();
+    for (uint i = 0; i < collectedBestInputEvents.Length; i++)
+        bestInputEvents.Add(collectedBestInputEvents[i]);
+    hasBestInputs = true;
+}
+void CopyCollectedBestToCollectionWindowBaseInputs()
+{
+    if (!hasCollectedBestInputs)
+        return;
+    collectionWindowBaseInputEvents.Clear();
+    for (uint i = 0; i < collectedBestInputEvents.Length; i++)
+        collectionWindowBaseInputEvents.Add(collectedBestInputEvents[i]);
+    hasCollectionWindowBaseInputs = true;
+}
+void SaveActiveSearchStateAsCollectionWindow()
+{
+    collectionWindowRewindState = rewindState;
+    collectionWindowRewindStateAssigned = rewindStateAssigned;
+    collectionWindowSimStateCache.Clear();
+    collectionWindowSimStateTimes.Clear();
+    for (uint i = 0; i < simStateCache.Length; i++)
+        collectionWindowSimStateCache.Add(simStateCache[i]);
+    for (uint i = 0; i < simStateTimes.Length; i++)
+        collectionWindowSimStateTimes.Add(simStateTimes[i]);
+    hasCollectionWindowSearchState = rewindStateAssigned;
+}
+void SaveActiveSearchStateAsCollectedBest()
+{
+    collectedBestRewindState = rewindState;
+    collectedBestRewindStateAssigned = rewindStateAssigned;
+    collectedBestSimStateCache.Clear();
+    collectedBestSimStateTimes.Clear();
+    for (uint i = 0; i < simStateCache.Length; i++)
+        collectedBestSimStateCache.Add(simStateCache[i]);
+    for (uint i = 0; i < simStateTimes.Length; i++)
+        collectedBestSimStateTimes.Add(simStateTimes[i]);
+    hasCollectedBestSearchState = rewindStateAssigned;
+}
+void RestoreCollectionWindowSearchState()
+{
+    simStateCache.Clear();
+    simStateTimes.Clear();
+    if (!hasCollectionWindowSearchState)
+        return;
+    rewindState = collectionWindowRewindState;
+    rewindStateAssigned = collectionWindowRewindStateAssigned;
+    for (uint i = 0; i < collectionWindowSimStateCache.Length; i++)
+        simStateCache.Add(collectionWindowSimStateCache[i]);
+    for (uint i = 0; i < collectionWindowSimStateTimes.Length; i++)
+        simStateTimes.Add(collectionWindowSimStateTimes[i]);
+}
+void RestoreCollectedBestSearchState()
+{
+    simStateCache.Clear();
+    simStateTimes.Clear();
+    if (!hasCollectedBestSearchState)
+        return;
+    rewindState = collectedBestRewindState;
+    rewindStateAssigned = collectedBestRewindStateAssigned;
+    for (uint i = 0; i < collectedBestSimStateCache.Length; i++)
+        simStateCache.Add(collectedBestSimStateCache[i]);
+    for (uint i = 0; i < collectedBestSimStateTimes.Length; i++)
+        simStateTimes.Add(collectedBestSimStateTimes[i]);
+}
+void PromoteCollectedBestToCollectionWindow()
+{
+    if (!hasCollectedBestInputs)
+        return;
+    CopyCollectedBestToBestInputs();
+    CopyCollectedBestToCollectionWindowBaseInputs();
+    if (hasCollectedBestSearchState)
+    {
+        collectionWindowRewindState = collectedBestRewindState;
+        collectionWindowRewindStateAssigned = collectedBestRewindStateAssigned;
+        collectionWindowSimStateCache.Clear();
+        collectionWindowSimStateTimes.Clear();
+        for (uint i = 0; i < collectedBestSimStateCache.Length; i++)
+            collectionWindowSimStateCache.Add(collectedBestSimStateCache[i]);
+        for (uint i = 0; i < collectedBestSimStateTimes.Length; i++)
+            collectionWindowSimStateTimes.Add(collectedBestSimStateTimes[i]);
+        hasCollectionWindowSearchState = true;
+        RestoreCollectedBestSearchState();
+    }
+    else
+    {
+        collectionWindowSimStateCache.Clear();
+        collectionWindowSimStateTimes.Clear();
+        hasCollectionWindowSearchState = false;
+        simStateCache.Clear();
+        simStateTimes.Clear();
+    }
+    ClearCollectedBestState();
+    print("Improvement collection: promoted collected best at iteration " + info.Iterations + ".");
+    DashboardLog("Improvement collection promoted best at iteration " + Text::FormatUInt(info.Iterations));
+}
+void AdvanceImprovementCollectionPromotionThreshold()
+{
+    if (improvementCollectionIterations <= 0)
+        return;
+    if (nextCollectionPromotionIteration <= 0)
+        nextCollectionPromotionIteration = improvementCollectionIterations;
+    while (nextCollectionPromotionIteration <= int(info.Iterations))
+        nextCollectionPromotionIteration += improvementCollectionIterations;
+}
+void HandleImprovementCollectionPromotionIfDue()
+{
+    if (!collectionModeEnabled || improvementCollectionIterations <= 0)
+        return;
+    if (nextCollectionPromotionIteration <= 0)
+        nextCollectionPromotionIteration = improvementCollectionIterations;
+    if (int(info.Iterations) < nextCollectionPromotionIteration)
+        return;
+    if (hasCollectedBestInputs)
+        PromoteCollectedBestToCollectionWindow();
+    AdvanceImprovementCollectionPromotionThreshold();
+}
+void SaveImprovementCollectionInitialState()
+{
+    if (!collectionModeEnabled)
+        return;
+    if (collectionInitialRunIsCollectedBest)
+    {
+        SaveActiveSearchStateAsCollectedBest();
+        collectionInitialRunIsCollectedBest = false;
+    }
+    else
+    {
+        SaveActiveSearchStateAsCollectionWindow();
+    }
+}
+void ConfigureImprovementCollection(SimulationManager @simManager)
+{
+    int setting = GetImprovementCollectionIterationsSetting();
+    bool enable = setting > 0 && IsImprovementCollectionSupportedByCurrentTarget();
+    ResetImprovementCollectionRuntime();
+    improvementCollectionIterations = setting;
+    collectionModeEnabled = enable;
+    if (!collectionModeEnabled)
+        return;
+    nextCollectionPromotionIteration = improvementCollectionIterations;
+    SaveCollectionWindowBaseInputs(simManager);
+}
+void StartNextSearchAttempt(SimulationManager @simManager)
+{
+    if (collectionModeEnabled)
+    {
+        HandleImprovementCollectionPromotionIfDue();
+        RestoreCollectionWindowSearchState();
+        RestoreCollectionWindowBaseInputs(simManager);
+    }
+    else
+    {
+        RestoreBestInputs(simManager);
+    }
+    MutateAllInputs(simManager.InputEvents);
+    simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
+    info.Rewinded = true;
+    info.Phase = BFPhase::Search;
+    info.Iterations++;
+    currentIterations = info.Iterations;
+    currentPhase = "Search";
 }
 array<int> CheckpointStates;
 bool IsBfV2Active = false;
@@ -1593,6 +1857,8 @@ void OnSimulationBegin(SimulationManager @simManager)
     }
     restartIterations = int(GetVariableDouble("bf_iterations_before_restart"));
     resultFolder = GetVariableString("bf_result_folder");
+    int startupCollectionIterations = GetImprovementCollectionIterationsSetting();
+    bool startupCollectionSupported = IsImprovementCollectionSupportedByCurrentTarget();
     print("Bruteforce V2 started with settings:");
     print(" - Target: " + current.title);
     print(" - Relative Steering Algorithms: " + (GetVariableBool("bf_relative_steering_enabled") ? "Enabled" : "Disabled"));
@@ -1665,12 +1931,19 @@ void OnSimulationBegin(SimulationManager @simManager)
     print(" - Min Speed: " + Text::FormatFloat(minSpeed * 3.6f, "", 0, 2) + " km/h");
     print(" - Min CPs: " + minCps);
     print("Restarting every " + restartIterations + " Iterations");
+    if (startupCollectionIterations > 0 && startupCollectionSupported)
+        print("Improvement collection mode: Enabled, promoting the collected best every " + startupCollectionIterations + " iterations.");
+    else if (startupCollectionIterations > 0)
+        print("Improvement collection mode: Disabled for this target.");
+    else
+        print("Improvement collection mode: Disabled.");
     print("Storing results to folder: " + resultFolder);
     SetConsoleWindowTitle("BfV2 - " + current.title + " starting...");
     bestInputEvents.Clear();
     hasBestInputs = false;
     SaveBestInputs(simManager);
     SaveBaseInputs(simManager);
+    ConfigureImprovementCollection(simManager);
     if (current.onSimBegin !is null)
         current.onSimBegin(simManager);
 }
@@ -1691,6 +1964,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         restartCount++;
         currentRestarts = uint(restartCount);
         DashboardLog("Restart #" + Text::FormatInt(restartCount));
+        if (collectionModeEnabled && hasCollectedBestInputs)
+            CopyCollectedBestToBestInputs();
         RestoreBestInputs(simManager);
         CommandList list();
         list.Content = simManager.InputEvents.ToCommandsText();
@@ -1714,6 +1989,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         list.Save(fullpath) ? print("Saved command list to: " + fullpath) : print("Failed to save command list to: " + fullpath);
         RestoreBaseInputs(simManager, false);
         SaveBestInputs(simManager, false);
+        ConfigureImprovementCollection(simManager);
         SetConsoleWindowTitle("BfV2 - " + current.title  + " | Restarts: " + restartCount + " | restarting...");
         print("Restarting Bruteforce for reasons: ");
         if (r1)
@@ -1890,12 +2166,17 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             fillSteerInputs = g_inputModSettings[0].fillSteerInputs;
         }
         leastMinInputsTime = ComputeLeastInputModMinTime();
+        int newImprovementCollectionIterations = GetImprovementCollectionIterationsSetting();
+        bool newCollectionModeEnabled = newImprovementCollectionIterations > 0 && IsImprovementCollectionSupportedByCurrentTarget();
+        if (newImprovementCollectionIterations != improvementCollectionIterations || newCollectionModeEnabled != collectionModeEnabled)
+            settingsChanged = true;
     }
     if (settingsChanged)
     {
         RestoreBestInputs(simManager);
         simStateCache.Clear();
         simStateTimes.Clear();
+        ConfigureImprovementCollection(simManager);
         simManager.RewindToState(rewindState);
         info.Phase = BFPhase::Initial;
         info.Rewinded = false;
@@ -1918,14 +2199,9 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             return;
         if (simManager.TickTime > simManager.RaceTime + 10 && !info.Rewinded && response.Decision != BFEvaluationDecision::Accept)
         {
-            RestoreBestInputs(simManager);
-            MutateAllInputs(simManager.InputEvents);
-            simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
-            info.Rewinded = true;
-            info.Phase = BFPhase::Search;
-            info.Iterations++;
-            currentIterations = info.Iterations;
-            currentPhase = "Search";
+            if (info.Phase == BFPhase::Initial)
+                SaveImprovementCollectionInitialState();
+            StartNextSearchAttempt(simManager);
             ResultFileStartContent = response.ResultFileStartContent == "" ? ResultFileStartContent : response.ResultFileStartContent;
             return;
         }
@@ -1950,14 +2226,8 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             {
                 if (raceTime > int(simManager.EventsDuration) + 50 || response.Decision == BFEvaluationDecision::Accept)
                 {
-                    RestoreBestInputs(simManager);
-                    MutateAllInputs(simManager.InputEvents);
-                    simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
-                    info.Rewinded = true;
-                    info.Phase = BFPhase::Search;
-                    info.Iterations++;
-                    currentIterations = info.Iterations;
-                    currentPhase = "Search";
+                    SaveImprovementCollectionInitialState();
+                    StartNextSearchAttempt(simManager);
                     ResultFileStartContent = response.ResultFileStartContent == "" ? ResultFileStartContent : response.ResultFileStartContent;
                 }
             }
@@ -1968,17 +2238,14 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             {
                 if (raceTime > int(simManager.EventsDuration))
                 {
-                    RestoreBestInputs(simManager);
-                    MutateAllInputs(simManager.InputEvents);
-                    simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
-                    info.Rewinded = true;
-                    info.Iterations++;
-                    currentIterations = info.Iterations;
+                    StartNextSearchAttempt(simManager);
                 }
             }
             else if (response.Decision == BFEvaluationDecision::Accept)
             {
                 SaveBestInputs(simManager, false);
+                if (collectionModeEnabled)
+                    SaveCollectedBestInputs(simManager);
                 CommandList list;
                 RestoreBestInputs(simManager, false);
                 list.Content = simManager.InputEvents.ToCommandsText();
@@ -1997,6 +2264,13 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                 simStateTimes.Clear();
                 simManager.RewindToState(rewindState);
                 RestoreBestInputs(simManager, false);
+                if (collectionModeEnabled)
+                {
+                    collectedBestSimStateCache.Clear();
+                    collectedBestSimStateTimes.Clear();
+                    hasCollectedBestSearchState = false;
+                    collectionInitialRunIsCollectedBest = true;
+                }
                 info.Rewinded = true;
                 info.Iterations++;
                 currentIterations = info.Iterations;
@@ -2008,13 +2282,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             }
             else if (response.Decision == BFEvaluationDecision::Reject)
             {
-                RestoreBestInputs(simManager);
-                MutateAllInputs(simManager.InputEvents);
-                simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
-                info.Rewinded = true;
-                info.Iterations++;
-                currentIterations = info.Iterations;
-                currentPhase = "Search";
+                StartNextSearchAttempt(simManager);
             }
             else if (response.Decision == BFEvaluationDecision::Stop)
             {

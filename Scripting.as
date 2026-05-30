@@ -443,9 +443,10 @@ namespace Scripting
             FunctionTimeSince @fn = FunctionTimeSince(arg);
             return FloatGetter(fn.Get);
         }
-        if (StartsWith(lower, "variable(") && EndsWith(t, ")"))
+        if ((StartsWith(lower, "variable(") || StartsWith(lower, "var(")) && EndsWith(t, ")"))
         {
-            string content = t.Substr(9, t.Length - 10);
+            int prefixLen = StartsWith(lower, "var(") ? 4 : 9;
+            string content = t.Substr(prefixLen, t.Length - prefixLen - 1);
             if (StartsWith(content, "\"") && EndsWith(content, "\""))
             {
                 content = content.Substr(1, content.Length - 2);
@@ -539,9 +540,10 @@ namespace Scripting
                 return Vec3Getter(c.Get);
             }
         }
-        if (StartsWith(lower, "variable(") && EndsWith(t, ")"))
+        if ((StartsWith(lower, "variable(") || StartsWith(lower, "var(")) && EndsWith(t, ")"))
         {
-            string content = t.Substr(9, t.Length - 10);
+            int prefixLen = StartsWith(lower, "var(") ? 4 : 9;
+            string content = t.Substr(prefixLen, t.Length - prefixLen - 1);
             if (StartsWith(content, "\"") && EndsWith(content, "\""))
             {
                 content = content.Substr(1, content.Length - 2);

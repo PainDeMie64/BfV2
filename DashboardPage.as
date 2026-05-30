@@ -69,6 +69,7 @@ string HandleBfDashboard(const string &in body)
     h += "<div class='sec-body'>";
     h += "<div class='field-row'><label>Result Filename</label><input type='text' id='behFile' data-var='bf_result_filename'></div>";
     h += "<div class='field-row'><label>Iterations Before Restart</label><input type='number' id='behIter' data-var='bf_iterations_before_restart' min='0' step='1'></div>";
+    h += "<div class='field-row'><label>Improvement Collection Iterations</label><input type='number' id='behCollectIter' data-var='bf_improvement_collection_iterations' min='0' step='1'></div>";
     h += "<div class='field-row'><label>Result Folder</label><input type='text' id='behFolder' data-var='bf_result_folder'></div>";
     h += "<div class='chk-row'><input type='checkbox' id='behPersist' data-var='bf_dashboard_persist_logs'><label for='behPersist'>Persist dashboard logs to file</label></div>";
     h += "<div class='field-row full'><label>Restart Condition Script</label><textarea id='behRestartScript' data-var='bf_restart_condition_script' data-script='1' rows='3'></textarea></div>";
@@ -395,7 +396,8 @@ string BfDashJS_Helpers()
 
     // Script text conversions (colon <-> newline)
     j += "function scriptToDisplay(s){if(!s)return '';return s.split(':').join('\\n');}";
-    j += "function displayToScript(s){if(!s)return '';return s.split('\\n').join(':');}";
+    j += "function normalizeScriptVars(s){return String(s||'').replace(/\\b(variable|var)\\(\\\"([A-Za-z0-9_.$-]+)\\\"\\)/g,'$1($2)');}";
+    j += "function displayToScript(s){if(!s)return '';return normalizeScriptVars(s).split('\\n').join(':');}";
 
     // POST /api/bf/set helper (mode-aware: buffers during BF, immediate otherwise)
     j += "function setVar(name, value) {";
@@ -1757,6 +1759,7 @@ string BfDashJS_Settings()
     j += "if(cfg.behavior){";
     j += "serverSnapshot['bf_result_filename']=String(cfg.behavior.resultFilename);";
     j += "serverSnapshot['bf_iterations_before_restart']=String(cfg.behavior.iterationsBeforeRestart);";
+    j += "serverSnapshot['bf_improvement_collection_iterations']=String(cfg.behavior.improvementCollectionIterations);";
     j += "serverSnapshot['bf_result_folder']=String(cfg.behavior.resultFolder);";
     j += "serverSnapshot['bf_restart_condition_script']=String(cfg.behavior.restartConditionScript);";
     j += "serverSnapshot['bf_dashboard_persist_logs']=String(cfg.behavior.persistLogs);}";
@@ -1807,6 +1810,7 @@ string BfDashJS_Settings()
     // Update behavior fields
     j += "setField(document.getElementById('behFile'),cfg.behavior.resultFilename);";
     j += "setField(document.getElementById('behIter'),cfg.behavior.iterationsBeforeRestart);";
+    j += "setField(document.getElementById('behCollectIter'),cfg.behavior.improvementCollectionIterations);";
     j += "setField(document.getElementById('behFolder'),cfg.behavior.resultFolder);";
     j += "setField(document.getElementById('behPersist'),cfg.behavior.persistLogs);";
     j += "var behScript=document.getElementById('behRestartScript');";
@@ -1844,6 +1848,7 @@ string BfDashJS_Settings()
     j += "document.getElementById('optTarget').addEventListener('change',function(){setVar('bf_target',this.value);prevTarget='';});";
     j += "document.getElementById('behFile').addEventListener('blur',function(){setVar('bf_result_filename',this.value);});";
     j += "document.getElementById('behIter').addEventListener('blur',function(){setVar('bf_iterations_before_restart',this.value);});";
+    j += "document.getElementById('behCollectIter').addEventListener('blur',function(){setVar('bf_improvement_collection_iterations',this.value);});";
     j += "document.getElementById('behFolder').addEventListener('blur',function(){setVar('bf_result_folder',this.value);});";
     j += "document.getElementById('behPersist').addEventListener('change',function(){setVar('bf_dashboard_persist_logs',this.checked?'true':'false');});";
     j += "document.getElementById('behRestartScript').addEventListener('blur',function(){setVar('bf_restart_condition_script',displayToScript(this.value));});";

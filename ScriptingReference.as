@@ -117,7 +117,7 @@ namespace ScriptingReference
             Code("distance(car.pos, (105.5, 20.0, 300.0)) < 5.0");
             Desc("Car within 5m of a fixed point");
             UI::Dummy(vec2(0, 1));
-            Code("distance(car.pos, variable(\"bf_target_point\")) < 3.0");
+            Code("distance(car.pos, variable(bf_target_point)) < 3.0");
             Desc("Car within 3m of the single point BF target");
             UI::Dummy(vec2(0, 1));
             Code("car.wheels.frontleft.surface = 2");
@@ -273,7 +273,7 @@ namespace ScriptingReference
                 VarRow("deg(value)", "Converts radians to degrees");
                 VarRow("distance(vec1, vec2)", "Euclidean distance between two vec3s");
                 VarRow("time_since(timestamp)", "Seconds elapsed since timestamp");
-                VarRow("variable(\"name\")", "Read a TMInterface variable as float or vec3");
+                VarRow("variable(name) / var(name)", "Read a TMInterface variable as float or vec3");
                 UI::EndTable();
             }
             SubHeader("Operators");
