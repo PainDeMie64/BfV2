@@ -1111,6 +1111,8 @@ class InputModificationSettings
     bool enabled = true;
     int inputCount = 0;
     int minInputsTime = 0;
+    // maxInputsTime can be tightened at runtime; keep the user-configured value separate for hot-swap detection.
+    int configuredMaxInputsTime = 0;
     int maxInputsTime = 0;
     int maxSteerDiff = 0;
     int maxTimeDiff = 0;
@@ -1122,6 +1124,7 @@ class InputModificationSettings
     {
         inputCount = count;
         minInputsTime = minTime;
+        configuredMaxInputsTime = maxTime;
         maxInputsTime = maxTime;
         maxSteerDiff = steerDiff;
         maxTimeDiff = timeDiff;
@@ -1167,7 +1170,9 @@ void ReadInputModificationSettings(InputModificationSettings @settings, uint set
 
     settings.inputCount = int(GetVariableDouble("bf_modify_count" + varSuffix));
     settings.minInputsTime = int(GetVariableDouble("bf_inputs_min_time" + varSuffix));
-    settings.maxInputsTime = ResolveMaxTime(int(GetVariableDouble("bf_inputs_max_time" + varSuffix)), int(simManager.EventsDuration));
+    int resolvedMaxTime = ResolveMaxTime(int(GetVariableDouble("bf_inputs_max_time" + varSuffix)), int(simManager.EventsDuration));
+    settings.configuredMaxInputsTime = resolvedMaxTime;
+    settings.maxInputsTime = resolvedMaxTime;
     settings.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
     settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
     settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
@@ -2140,14 +2145,17 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             bool newRelativeMode = GetVariableBool("bf_relative_steering_enabled");
             string newAlgoId = GetInputModActiveAlgorithmId(varSuffix, newRelativeMode);
             int newAlgoIdx = GetInputModAlgorithmIndexForMode(newAlgoId, newRelativeMode);
-            if (s.inputCount != newInputCount || s.minInputsTime != newMinTime || s.maxInputsTime != newMaxTime
+            bool slotSettingsChanged = s.inputCount != newInputCount || s.minInputsTime != newMinTime || s.configuredMaxInputsTime != newMaxTime
                 || s.maxSteerDiff != newMaxSteerDiff || s.maxTimeDiff != newMaxTimeDiff
                 || s.fillSteerInputs != newFill || s.enabled != newEnabled || s.algorithmIndex != newAlgoIdx
-                || s.relativeSteeringEnabled != newRelativeMode)
+                || s.relativeSteeringEnabled != newRelativeMode;
+            if (slotSettingsChanged)
                 settingsChanged = true;
             s.inputCount = newInputCount;
             s.minInputsTime = newMinTime;
-            s.maxInputsTime = newMaxTime;
+            s.configuredMaxInputsTime = newMaxTime;
+            if (slotSettingsChanged)
+                s.maxInputsTime = newMaxTime;
             s.maxSteerDiff = newMaxSteerDiff;
             s.maxTimeDiff = newMaxTimeDiff;
             s.fillSteerInputs = newFill;
