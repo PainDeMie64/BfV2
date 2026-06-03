@@ -13,7 +13,7 @@ PluginInfo @GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Bruteforce V2 + Dashboard";
     info.Author = "Skycrafter";
-    info.Version = "2.4";
+    info.Version = "2.6";
     info.Description = "Next generation bruteforce with web dashboard";
     return info;
 }

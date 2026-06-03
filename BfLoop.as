@@ -865,6 +865,7 @@ void SmoothSteering_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
 
     // Fill missing steer inputs in the active time range
     FillMissingSteerInputs(buffer, minTime, maxTime);
+    InputModification::SortAndNormalizeBuffer(buffer);
 
     // Pick N bumps
     if (minAmount < 1) minAmount = 1;
@@ -900,6 +901,7 @@ void SmoothSteering_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
             InputModification::g_earliestMutationTime = Math::Min(InputModification::g_earliestMutationTime, currentTime);
         }
     }
+    InputModification::SortAndNormalizeBuffer(buffer);
 }
 void SmoothSteering_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
 {

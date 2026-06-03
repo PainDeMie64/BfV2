@@ -109,23 +109,89 @@ namespace InputModification
             buffer[startCopy + i] = events[i];
         }
     }
+    void ReplaceBufferEvents(TM::InputEventBuffer @buffer, const array<TM::InputEvent> &in events)
+    {
+        if (buffer is null)
+            return;
+        const uint bufferLen = buffer.Length;
+        const uint eventsLen = events.Length;
+        if (bufferLen > eventsLen)
+        {
+            uint i;
+            for (i = 0; i < eventsLen; i++)
+            {
+                buffer[i] = events[i];
+            }
+            buffer.RemoveAt(i, bufferLen - eventsLen);
+        }
+        else
+        {
+            uint i;
+            for (i = 0; i < bufferLen; i++)
+            {
+                buffer[i] = events[i];
+            }
+            while (i < eventsLen)
+            {
+                buffer.Add(events[i++]);
+            }
+        }
+    }
+    void NormalizeDuplicateInputs(TM::InputEventBuffer @buffer)
+    {
+        if (buffer is null || buffer.Length < 2)
+            return;
+        array<TM::InputEvent> events;
+        for (uint i = 0; i < buffer.Length; i++)
+        {
+            auto evt = buffer[i];
+            bool foundDuplicate = false;
+            int j = int(events.Length) - 1;
+            while (j >= 0)
+            {
+                if (events[j].Time != evt.Time)
+                    break;
+                if (events[j].Value.EventIndex == evt.Value.EventIndex)
+                {
+                    events[j] = evt;
+                    foundDuplicate = true;
+                    break;
+                }
+                j--;
+            }
+            if (!foundDuplicate)
+            {
+                events.Add(evt);
+            }
+        }
+        if (events.Length != buffer.Length)
+        {
+            ReplaceBufferEvents(buffer, events);
+            cachedStartIndex = -1;
+        }
+    }
+    void SortAndNormalizeBuffer(TM::InputEventBuffer @buffer, int startIndex = -1)
+    {
+        SortBufferManual(buffer, startIndex);
+        NormalizeDuplicateInputs(buffer);
+    }
     void MutateInputs(TM::InputEventBuffer @buffer, int inputCount, int minTime, int maxTime, int maxSteerDiff, int maxTimeDiff, bool fillInputs)
     {
         if (buffer is null)
             return;
         if (maxTime <= 0)
             return;
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
         if (fillInputs)
         {
             uint lenBefore = buffer.Length;
             FillInputs(buffer, maxTime, cachedStartIndex);
             if (buffer.Length != lenBefore)
                 cachedStartIndex = -1;
-        }
-        if (minTime != cachedMinTime)
-        {
-            cachedMinTime = minTime;
-            cachedStartIndex = -1;
         }
         array<int> indices;
         uint start = 0;
@@ -193,7 +259,7 @@ namespace InputModification
             g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
         }
-        SortBufferManual(buffer, cachedStartIndex);
+        SortAndNormalizeBuffer(buffer, cachedStartIndex);
     }
     void MutateRelativeInputs(TM::InputEventBuffer @buffer, int inputCount, int minTime, int maxTime, int maxSteerDiff, int maxTimeDiff, bool fillInputs)
     {
@@ -201,17 +267,17 @@ namespace InputModification
             return;
         if (maxTime <= 0)
             return;
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
         if (fillInputs)
         {
             uint lenBefore = buffer.Length;
             FillInputs(buffer, maxTime, cachedStartIndex);
             if (buffer.Length != lenBefore)
                 cachedStartIndex = -1;
-        }
-        if (minTime != cachedMinTime)
-        {
-            cachedMinTime = minTime;
-            cachedStartIndex = -1;
         }
         array<int> indices;
         uint start = 0;
@@ -279,7 +345,7 @@ namespace InputModification
             }
             g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
         }
-        SortBufferManual(buffer, cachedStartIndex);
+        SortAndNormalizeBuffer(buffer, cachedStartIndex);
     }
     void MutateInputsRange(TM::InputEventBuffer @buffer, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int maxTimeDiff, bool fillInputs)
     { 
@@ -287,17 +353,17 @@ namespace InputModification
             return;
         if (maxTime <= 0)
             return;
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
         if (fillInputs)
         {
             uint lenBefore = buffer.Length;
             FillInputs(buffer, maxTime, cachedStartIndex);
             if (buffer.Length != lenBefore)
                 cachedStartIndex = -1;
-        }
-        if (minTime != cachedMinTime)
-        {
-            cachedMinTime = minTime;
-            cachedStartIndex = -1;
         }
         if (minInputCount > maxInputCount)
         {
@@ -380,7 +446,7 @@ namespace InputModification
             g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
         }
-        SortBufferManual(buffer, cachedStartIndex);
+        SortAndNormalizeBuffer(buffer, cachedStartIndex);
     }
     void MutateRelativeInputsRange(TM::InputEventBuffer @buffer, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int maxTimeDiff, bool fillInputs)
     {
@@ -388,17 +454,17 @@ namespace InputModification
             return;
         if (maxTime <= 0)
             return;
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
         if (fillInputs)
         {
             uint lenBefore = buffer.Length;
             FillInputs(buffer, maxTime, cachedStartIndex);
             if (buffer.Length != lenBefore)
                 cachedStartIndex = -1;
-        }
-        if (minTime != cachedMinTime)
-        {
-            cachedMinTime = minTime;
-            cachedStartIndex = -1;
         }
         if (minInputCount > maxInputCount)
         {
@@ -482,7 +548,7 @@ namespace InputModification
             }
             g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
         }
-        SortBufferManual(buffer, cachedStartIndex);
+        SortAndNormalizeBuffer(buffer, cachedStartIndex);
     }
     void FillInputs(TM::InputEventBuffer @buffer, int maxTime, int minIndex)
     {
@@ -558,17 +624,17 @@ namespace InputModification
             return;
         if (maxTime <= 0)
             return;
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
         if (fillInputs && eventTypeId == int(buffer.EventIndices.SteerId))
         {
             uint lenBefore = buffer.Length;
             FillInputs(buffer, maxTime, cachedStartIndex);
             if (buffer.Length != lenBefore)
                 cachedStartIndex = -1;
-        }
-        if (minTime != cachedMinTime)
-        {
-            cachedMinTime = minTime;
-            cachedStartIndex = -1;
         }
         array<int> indices;
         uint start = 0;
@@ -641,7 +707,7 @@ namespace InputModification
             g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
         }
-        SortBufferManual(buffer, cachedStartIndex);
+        SortAndNormalizeBuffer(buffer, cachedStartIndex);
     }
     void MutateInputsRangeByType(TM::InputEventBuffer @buffer, int eventTypeId, int minInputCount, int maxInputCount, int minTime, int maxTime, int minSteer, int maxSteer, int minTimeDiff, int maxTimeDiff, bool fillInputs, bool isBinaryInput)
     {
@@ -649,17 +715,17 @@ namespace InputModification
             return;
         if (maxTime <= 0)
             return;
+        if (minTime != cachedMinTime)
+        {
+            cachedMinTime = minTime;
+            cachedStartIndex = -1;
+        }
         if (fillInputs && eventTypeId == int(buffer.EventIndices.SteerId))
         {
             uint lenBefore = buffer.Length;
             FillInputs(buffer, maxTime, cachedStartIndex);
             if (buffer.Length != lenBefore)
                 cachedStartIndex = -1;
-        }
-        if (minTime != cachedMinTime)
-        {
-            cachedMinTime = minTime;
-            cachedStartIndex = -1;
         }
         if (minInputCount > maxInputCount)
         {
@@ -750,6 +816,6 @@ namespace InputModification
             g_earliestMutationTime = Math::Min(g_earliestMutationTime, Math::Min(origRaceTime, newRaceTime));
             buffer[inputIdx] = evt;
         }
-        SortBufferManual(buffer, cachedStartIndex);
+        SortAndNormalizeBuffer(buffer, cachedStartIndex);
     }
 }

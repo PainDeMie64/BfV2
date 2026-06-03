@@ -327,11 +327,15 @@ namespace NoseposPlusBf
                     best = curr;
                     PrintGreenTextNosePos(best);
                 }
+                if (IsPastEvalTime(raceTime)) {
+                    resp.ResultFileStartContent = "# " + FormatNosePosSummary(best, "base");
+                }
             }
             else {
                 if (IsPastEvalTime(raceTime)) {
                     if (IsBetterNosePos(simManager, curr)) {
                         resp.Decision = BFEvaluationDecision::Accept;
+                        resp.ResultFileStartContent = "# " + FormatNosePosSummary(curr, "best");
                         return resp;
                     }
                     if (!IsNosePos(simManager)) {
@@ -350,6 +354,9 @@ namespace NoseposPlusBf
                 if (IsMaxTime(raceTime)) {
                     PrintGreenTextNosePos(best);
                 }
+                if (IsPastEvalTime(raceTime)) {
+                    resp.ResultFileStartContent = "# " + FormatNosePosSummary(best, "base");
+                }
             }
             else {
                 if (IsEvalTime(raceTime)) {
@@ -359,6 +366,7 @@ namespace NoseposPlusBf
                     }
                     if (IsBetterNosePos(simManager, curr)) {
                         resp.Decision = BFEvaluationDecision::Accept;
+                        resp.ResultFileStartContent = "# " + FormatNosePosSummary(curr, "best");
                         return resp;
                     }
                 }
@@ -474,13 +482,21 @@ namespace NoseposPlusBf
         return curr.angle < best.angle;
     }
 
+    string FormatNosePosSummary(CarState state, const string &in label)
+    {
+        if (state.time < 0) {
+            return "Base run: Invalid";
+        }
+        string summary = label + " at " + state.time + ": angle=" + state.angle;
+        if (GetS("shweetz_next_eval") == "Point") summary += ", Distance=" + state.distance;
+        if (GetS("shweetz_next_eval") == "Speed") summary += ", Speed=" + state.speed;
+        summary += ", Iteration=" + iterations;
+        return summary;
+    }
+
     void PrintGreenTextNosePos(CarState best)
     {
-        string greenText = "base at " + best.time + ": angle=" + best.angle;
-        if (GetS("shweetz_next_eval") == "Point") greenText += ", Distance=" + best.distance;
-        if (GetS("shweetz_next_eval") == "Speed") greenText += ", Speed=" + best.speed;
-        greenText += ", Iteration=" + iterations;
-        print(greenText);
+        print(FormatNosePosSummary(best, "base"));
     }
 
     // === OnSimBegin (BF-relevant reset only) ===

@@ -25,7 +25,7 @@ namespace TimeBf
         {
             if (conditionsMet && isPastMinTime)
             {
-                if (bestTime == -1 || raceTime < bestTime)
+                if (bestTime == -1 || raceTime <= bestTime)
                 {
                     bestTime = raceTime;
                     resp.Decision = BFEvaluationDecision::Accept;
@@ -40,9 +40,10 @@ namespace TimeBf
         }
         else
         {
-            if (conditionsMet && isPastMinTime && raceTime < bestTime)
+            if (conditionsMet && isPastMinTime && (bestTime == -1 || raceTime < bestTime))
             {
                 bestTime = raceTime;
+                base = false;
                 resp.Decision = BFEvaluationDecision::Accept;
                 print("New best time: " + Text::FormatFloat(bestTime / 1000.0, "", 0, 3) + " s");
                 resp.ResultFileStartContent = "# Best time: " + Text::FormatFloat(bestTime / 1000.0, "", 0, 3) + " s";

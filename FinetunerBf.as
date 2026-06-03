@@ -2023,30 +2023,24 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
             Severity severity;
             if (valid)
             {
-                if (isTargetGrouped)
-                    builder.Append({ groupNames[targetGroup], " | ", FormatVec3ByTargetGroup(best3, 6) });
-                else
-                    builder.Append({ scalarNames[targetScalar], " | ", FormatValueByScalar(targetScalar, best, 6) });
-
-                builder.Append({ " | Time: ", Time::Format(impTime) });
-
-                if (customTargetTowards)
-                    builder.Append({ " | Diff: ", FormatValueByTarget(diffBest) });
-
                 const uint iterations = info.Iterations;
+                const string summary = FormatResultSummary(best, best3, diffBest, impTime, iterations);
+                builder.Append(summary);
+                response.ResultFileStartContent = "# " + summary;
                 if (iterations == 0)
                 {
                     severity = Severity::Info;
                 }
                 else
                 {
-                    builder.Append({ " | Iterations: ", iterations });
                     severity = Severity::Success;
                 }
             }
             else
             {
-                builder.AppendLine("Base Run did not suffice...");
+                const string summary = "Base Run did not suffice...";
+                builder.AppendLine(summary);
+                response.ResultFileStartContent = "# " + summary;
 
                 const uint unmetConditionLength = unmetConditionIndices.Length;
                 if (unmetConditionLength != 0)
@@ -2075,7 +2069,10 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
         if (IsEvalTime(time))
         {
             if (IsBetter(simManager))
+            {
                 response.Decision = BFEvaluationDecision::Accept;
+                response.ResultFileStartContent = "# " + FormatResultSummary(current, current3, diffCurrent, time, info.Iterations);
+            }
         }
         else if (IsPastEvalTime(time))
         {
@@ -2085,6 +2082,25 @@ BFEvaluationResponse@ OnEvaluate(SimulationManager@ simManager, const BFEvaluati
     }
 
     return response;
+}
+
+string FormatResultSummary(const double value, const vec3 &in value3, const double diff, const ms time, const uint iterations)
+{
+    StringBuilder builder;
+    if (isTargetGrouped)
+        builder.Append({ groupNames[targetGroup], " | ", FormatVec3ByTargetGroup(value3, 6) });
+    else
+        builder.Append({ scalarNames[targetScalar], " | ", FormatValueByScalar(targetScalar, value, 6) });
+
+    builder.Append({ " | Time: ", Time::Format(time) });
+
+    if (customTargetTowards)
+        builder.Append({ " | Diff: ", FormatValueByTarget(diff) });
+
+    if (iterations > 0)
+        builder.Append({ " | Iterations: ", iterations });
+
+    return builder.ToString();
 }
 
 
@@ -2104,6 +2120,9 @@ bool IsPastEvalTime(const ms time)
 
 bool IsBetter(SimulationManager@ simManager)
 {
+    if (!GlobalConditionsMet(simManager))
+        return false;
+
     const auto@ const dyna = simManager.Dyna;
     const auto@ const currentState = dyna.RefStateCurrent;
     const auto@ const previousState = dyna.RefStatePrevious;
