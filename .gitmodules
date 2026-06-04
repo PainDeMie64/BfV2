@@ -1,0 +1,3 @@
+[submodule "tmphysicsbridge"]
+	path = tmphysicsbridge
+	url = git@github.com:PainDeMie64/tmphysicsbridge.git
