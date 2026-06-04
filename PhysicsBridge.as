@@ -3,7 +3,7 @@ namespace PhysicsBridge
     const uint16 PORT_FIRST = 39870;
     const uint16 PORT_LAST = 39879;
     const uint MAX_BUFFER_SIZE = 65536;
-    const uint MAX_LINE_SIZE = 2048;
+    const uint MAX_LINE_SIZE = 8192;
     const uint MAX_SAMPLES = 4096;
 
     class BridgeSample
@@ -56,6 +56,7 @@ namespace PhysicsBridge
     string buffer = "";
     bool connected = false;
     bool bridgeSeen = false;
+    bool bridgeReady = false;
     uint activeRun = 0;
     uint runCounter = 0;
     uint64 lastReadTime = 0;
@@ -74,6 +75,7 @@ namespace PhysicsBridge
         buffer = "";
         connected = false;
         bridgeSeen = false;
+        bridgeReady = false;
         lastReadTime = 0;
 
         for (uint16 p = PORT_FIRST; p <= PORT_LAST; p++)
@@ -94,6 +96,7 @@ namespace PhysicsBridge
         buffer = "";
         connected = false;
         bridgeSeen = false;
+        bridgeReady = false;
     }
 
     void ClearSamples()
@@ -159,6 +162,7 @@ namespace PhysicsBridge
                 buffer = "";
                 connected = true;
                 bridgeSeen = false;
+                bridgeReady = false;
                 lastReadTime = Time::Now;
                 SendPendingControl();
             }
@@ -185,6 +189,7 @@ namespace PhysicsBridge
             buffer = "";
             connected = false;
             bridgeSeen = false;
+            bridgeReady = false;
             return;
         }
 
@@ -213,7 +218,7 @@ namespace PhysicsBridge
     bool IsReady()
     {
         PollFast();
-        return @clientSock !is null && connected && bridgeSeen;
+        return @clientSock !is null && connected && bridgeSeen && bridgeReady;
     }
 
     bool FindSampleExactOrNear(int raceMs, BridgeSample@ &out sample, int maxAgeMs = 20)
@@ -268,6 +273,7 @@ namespace PhysicsBridge
 
         array<string>@ parts = rawLine.Split("|");
         string kind = "";
+        bool helloReady = true;
         BridgeSample@ sample = BridgeSample();
 
         for (uint i = 1; i < parts.Length; i++)
@@ -278,6 +284,7 @@ namespace PhysicsBridge
             string key = parts[i].Substr(0, eq);
             string value = parts[i].Substr(uint(eq + 1));
             if (key == "kind") kind = value;
+            else if (key == "ready") helloReady = Text::ParseInt(value) != 0;
             else if (key == "seq") sample.seq = uint(Text::ParseInt(value));
             else if (key == "run") sample.run = uint(Text::ParseInt(value));
             else if (key == "raceMs") sample.raceMs = int(Text::ParseInt(value));
@@ -323,6 +330,7 @@ namespace PhysicsBridge
         if (kind == "hello" || kind == "status")
         {
             bridgeSeen = true;
+            bridgeReady = helloReady;
             return;
         }
 
@@ -340,6 +348,7 @@ namespace PhysicsBridge
 
         sample.valid = true;
         bridgeSeen = true;
+        bridgeReady = true;
 
         uint index = uint(sample.raceMs) % MAX_SAMPLES;
         @sampleSlots[index] = sample;
