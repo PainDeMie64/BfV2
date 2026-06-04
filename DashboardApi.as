@@ -513,6 +513,12 @@ string HandleGetAllSettings(const string &in body)
         json += "," + JsonInt("uber_bf_bf_time_to", int(GetVariableDouble("uber_bf_bf_time_to")));
         json += "," + JsonFloat("uber_bf_uberbug_min_speed", float(GetVariableDouble("uber_bf_uberbug_min_speed")));
     }
+    else if (targetId == "progressive_uberbug")
+    {
+        json += JsonInt("progressive_uberbug_bf_time_from", int(GetVariableDouble("progressive_uberbug_bf_time_from")));
+        json += "," + JsonInt("progressive_uberbug_bf_time_to", int(GetVariableDouble("progressive_uberbug_bf_time_to")));
+        json += "," + JsonFloat("progressive_uberbug_min_score_gain", float(GetVariableDouble("progressive_uberbug_min_score_gain")));
+    }
     else if (targetId == "clbf")
     {
         vec3 clPos = Text::ParseVec3(GetVariableString("clbf_bf_target_position"));

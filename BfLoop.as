@@ -1757,6 +1757,7 @@ void StartNextSearchAttempt(SimulationManager @simManager)
     }
     MutateAllInputs(simManager.InputEvents);
     simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
+    PhysicsBridge::ClearSamples();
     info.Rewinded = true;
     info.Phase = BFPhase::Search;
     info.Iterations++;
@@ -1786,6 +1787,8 @@ void OnSimulationBegin(SimulationManager @simManager)
     }
     if (!IsBfV2Active)
         return;
+    PhysicsBridge::ClearSamples();
+    PhysicsBridge::PollForRace(simManager.RaceTime);
     @current = @GetBruteforceTarget();
     if (current is null)
     {
@@ -1960,6 +1963,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         return;
     if (forceStop || userCancelled)
         return;
+    PhysicsBridge::PollForRace(simManager.RaceTime);
     ViewerCapturePhaseStep(simManager);
     if (current !is null && current.onRunStep !is null)
         current.onRunStep(simManager);
@@ -2065,6 +2069,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         simStateCache.Clear();
         simStateTimes.Clear();
         simManager.RewindToState(rewindState);
+        PhysicsBridge::ClearSamples();
         return;
     }
     uint64 pollNow = Time::Now;
@@ -2188,6 +2193,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         simStateTimes.Clear();
         ConfigureImprovementCollection(simManager);
         simManager.RewindToState(rewindState);
+        PhysicsBridge::ClearSamples();
         info.Phase = BFPhase::Initial;
         info.Rewinded = false;
         currentPhase = "Initial";
@@ -2196,6 +2202,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
     int raceTime = simManager.RaceTime;
     if (current.type == CallbackType::FullControl)
     {
+        PhysicsBridge::PollForRace(simManager.RaceTime);
         BFEvaluationResponse @response = current.callback(simManager, info);
     }
     if (current.type == CallbackType::Legacy)
@@ -2204,6 +2211,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         {
             lastImprovementTime = Time::Now;
         }
+        PhysicsBridge::PollForRace(simManager.RaceTime);
         BFEvaluationResponse @response = current.callback(simManager, info);
         if (PreciseFinish::IsEstimating)
             return;
@@ -2273,6 +2281,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
                 simStateCache.Clear();
                 simStateTimes.Clear();
                 simManager.RewindToState(rewindState);
+                PhysicsBridge::ClearSamples();
                 RestoreBestInputs(simManager, false);
                 if (collectionModeEnabled)
                 {

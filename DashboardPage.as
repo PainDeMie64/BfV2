@@ -1308,6 +1308,13 @@ string BfDashJS_Settings()
     j += "c.appendChild(mkFieldRow('Time To',mkTime('uber_bf_bf_time_to')));";
     j += "c.appendChild(mkFieldRow('Min Speed',mkNum('uber_bf_uberbug_min_speed',null,null,10)));return;}";
 
+    // progressive_uberbug
+    j += "if(t==='progressive_uberbug'){";
+    j += "c.appendChild(mkFieldRow('Time From',mkTime('progressive_uberbug_bf_time_from')));";
+    j += "c.appendChild(mkFieldRow('Time To',mkTime('progressive_uberbug_bf_time_to')));";
+    j += "c.appendChild(mkFieldRow('Min Score Gain',mkNum('progressive_uberbug_min_score_gain',0,1,'0.001')));";
+    j += "var p=document.createElement('div');p.className='hint';p.textContent='Minimum increase over the current best readiness score on a 0.0 to 1.0 scale.';c.appendChild(p);return;}";
+
     // clbf
     j += "if(t==='clbf'){";
     j += "c.appendChild(mkFieldRow('Target Position',mkVec3('clbf_bf_target_position',true),true));";

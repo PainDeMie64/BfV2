@@ -106,6 +106,7 @@ void Main()
     RegisterVariable("don_bf_steering_modification_radius", 0);
     RegisterVariable("don_bf_modify_steering_min_diff", 1);
     RegisterVariable("don_bf_modify_steering_max_diff", 10000);
+    PhysicsBridge::Start();
     PreciseFinishBf::Main();
     PreciseCheckpointBf::Main();
     PreciseTriggerBf::Main();
@@ -118,6 +119,7 @@ void Main()
     CustomTargetBf::Main();
     FinetunerBf::Main();
     NoseposPlusBf::Main();
+    ProgressiveUberbugBf::Main();
     RegisterSettingsPage("Scripting Docs", ScriptingReference::Render);
 
     instancePid = IO::GetCurrentProcessId();
@@ -162,5 +164,6 @@ void Render()
 
 void OnDisabled()
 {
+    PhysicsBridge::Stop();
     StopServer();
 }
