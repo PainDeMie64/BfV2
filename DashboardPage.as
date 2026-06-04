@@ -507,9 +507,10 @@ string BfDashJS_Helpers()
     j += "showToast('Propagated '+keys.length+' settings to '+sent+' instance'+(sent!==1?'s':''));}";
 
     // Create a field-row div
-    j += "function mkFieldRow(labelText,inputEl,full){";
+    j += "function mkFieldRow(labelText,inputEl,full,tip){";
     j += "var d=document.createElement('div');d.className='field-row'+(full?' full':'');";
     j += "var lb=document.createElement('label');lb.textContent=labelText;";
+    j += "if(tip){d.title=tip;lb.title=tip;inputEl.title=tip;}";
     j += "d.appendChild(lb);d.appendChild(inputEl);return d;}";
 
     // Create a number input
@@ -1310,10 +1311,10 @@ string BfDashJS_Settings()
 
     // progressive_uberbug
     j += "if(t==='progressive_uberbug'){";
+    j += "var warn=document.createElement('div');warn.className='hint';warn.style.textTransform='uppercase';warn.style.color='#ef4444';warn.textContent='This target requires the TMPhysicsBridge mod and is incompatible with KimMod.';c.appendChild(warn);";
     j += "c.appendChild(mkFieldRow('Time From',mkTime('progressive_uberbug_bf_time_from')));";
     j += "c.appendChild(mkFieldRow('Time To',mkTime('progressive_uberbug_bf_time_to')));";
-    j += "c.appendChild(mkFieldRow('Min Score Gain',mkNum('progressive_uberbug_min_score_gain',0,1,'0.001')));";
-    j += "var p=document.createElement('div');p.className='hint';p.textContent='Minimum increase over the current best readiness score on a 0.0 to 1.0 scale.';c.appendChild(p);return;}";
+    j += "c.appendChild(mkFieldRow('Min Score Gain (%)',mkRange('progressive_uberbug_min_score_gain',0,100,0.1),false,'Required percentage-point increase over the current best uberbug likeliness. Example: current best 64.0%, gain 2.0%, accepts at 66.0% or higher.'));return;}";
 
     // clbf
     j += "if(t==='clbf'){";

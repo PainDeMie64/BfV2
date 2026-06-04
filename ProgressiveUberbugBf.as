@@ -28,11 +28,13 @@ namespace ProgressiveUberbugBf
     int timeFrom = 0;
     int timeTo = 0;
     float minScoreGain = 0.02f;
+    float minScoreGainPercent = 2.0f;
     ScoreSnapshot baselineBest;
     ScoreSnapshot globalBest;
     ScoreSnapshot candidateBest;
     uint lastSearchIteration = 4294967295;
     bool baselineSummaryPrinted = false;
+    bool bridgeStopPrinted = false;
     string lastPrintedStatus = "";
     float lastPrintedNearMissScore = -1.0f;
 
@@ -40,7 +42,7 @@ namespace ProgressiveUberbugBf
     {
         RegisterVariable(VAR_TIME_FROM, 0);
         RegisterVariable(VAR_TIME_TO, 0);
-        RegisterVariable(VAR_MIN_GAIN, 0.02);
+        RegisterVariable(VAR_MIN_GAIN, 2.0);
         auto eval = RegisterBruteforceEval(TARGET_ID, "Progressive uberbug", OnEvaluate, RenderSettings);
         @eval.onSimBegin = @OnSimulationBegin;
     }
@@ -54,12 +56,17 @@ namespace ProgressiveUberbugBf
 
     void RenderSettings()
     {
+        UI::PushStyleColor(UI::Col::Text, vec4(1, 0, 0, 1));
+        UI::TextWrapped("THIS TARGET REQUIRES THE TMPHYSICSBRIDGE MOD AND IS INCOMPATIBLE WITH KIMMOD.");
+        UI::PopStyleColor();
+        UI::Dummy(vec2(0, 8));
         UI::Text("Time frame");
         UI::InputTimeVar("From", VAR_TIME_FROM);
         UI::InputTimeVar("To", VAR_TIME_TO);
         UI::Dummy(vec2(0, 8));
-        UI::SliderFloatVar("Minimum score gain", VAR_MIN_GAIN, 0.0f, 1.0f, "%.3f");
-        UI::TextWrapped("Minimum score gain is the required increase over the current best readiness score on a 0.0 to 1.0 scale. A current best of 0.640 with a gain of 0.020 accepts at 0.660 or higher.");
+        UI::SliderFloatVar("Minimum score gain", VAR_MIN_GAIN, 0.0f, 100.0f, "%.1f%%");
+        toolTip(420, {"Required percentage-point increase over the current best uberbug likeliness.",
+            "Example: current best 64.0%, gain 2.0%, accepts at 66.0% or higher."});
     }
 
     BFEvaluationResponse@ OnEvaluate(SimulationManager @simManager, const BFEvaluationInfo &in info)
@@ -73,6 +80,8 @@ namespace ProgressiveUberbugBf
         bool inWindow = raceTime >= timeFrom && raceTime <= timeTo;
         bool pastWindow = raceTime > timeTo;
         PhysicsBridge::PollFast();
+        if (!PhysicsBridge::IsReady())
+            return StopMissingBridge();
 
         if (info.Phase == BFPhase::Initial)
         {
@@ -97,7 +106,7 @@ namespace ProgressiveUberbugBf
                 if (baselineBest.hasSample)
                     PrintRuntime("Base run: " + FormatLikeliness(baselineBest));
                 else
-                    PrintRuntimeOnce("Baseline complete without a fresh bridge sample. " + PhysicsBridge::StatusText());
+                    PrintRuntimeOnce("Base run: no bridge sample");
             }
             return resp;
         }
@@ -163,7 +172,8 @@ namespace ProgressiveUberbugBf
         timeTo = int(GetVariableDouble(VAR_TIME_TO));
         if (timeTo < timeFrom)
             timeTo = timeFrom;
-        minScoreGain = Clamp01(float(GetVariableDouble(VAR_MIN_GAIN)));
+        minScoreGainPercent = Clamp(float(GetVariableDouble(VAR_MIN_GAIN)), 0.0f, 100.0f);
+        minScoreGain = minScoreGainPercent / 100.0f;
     }
 
     void ResetScores()
@@ -173,11 +183,24 @@ namespace ProgressiveUberbugBf
         candidateBest = ScoreSnapshot();
         lastSearchIteration = 4294967295;
         baselineSummaryPrinted = false;
+        bridgeStopPrinted = false;
         lastPrintedStatus = "";
         lastPrintedNearMissScore = -1.0f;
         PrintRuntime("Started. Window " + Time::Format(timeFrom) + " to " + Time::Format(timeTo) +
-            ", minimum score gain " + Text::FormatFloat(minScoreGain, "", 0, 3) + ". " +
-            PhysicsBridge::StatusText());
+            ", minimum score gain " + Text::FormatFloat(minScoreGainPercent, "", 0, 1) + "%.");
+    }
+
+    BFEvaluationResponse@ StopMissingBridge()
+    {
+        auto resp = BFEvaluationResponse();
+        resp.Decision = BFEvaluationDecision::Stop;
+        resp.ResultFileStartContent = "# Progressive uberbug stopped: TMPhysicsBridge mod is not connected.";
+        if (!bridgeStopPrinted)
+        {
+            bridgeStopPrinted = true;
+            PrintRuntime("Stopped: TMPhysicsBridge mod is not connected. This target is incompatible with KimMod.");
+        }
+        return resp;
     }
 
     ScoreSnapshot ScoreAtRaceTime(int raceTime)
@@ -190,7 +213,8 @@ namespace ProgressiveUberbugBf
             missing.raceMs = raceTime;
             return missing;
         }
-        return ScoreSample(sample);
+        ScoreSnapshot score = ScoreSample(sample);
+        return score;
     }
 
     ScoreSnapshot ScoreSample(PhysicsBridge::BridgeSample@ sample)
@@ -274,8 +298,13 @@ namespace ProgressiveUberbugBf
 
     float Clamp01(float v)
     {
-        if (v < 0.0f) return 0.0f;
-        if (v > 1.0f) return 1.0f;
+        return Clamp(v, 0.0f, 1.0f);
+    }
+
+    float Clamp(float v, float lo, float hi)
+    {
+        if (v < lo) return lo;
+        if (v > hi) return hi;
         return v;
     }
 

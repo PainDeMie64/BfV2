@@ -17,8 +17,6 @@ namespace PhysicsBridge
         int offsetValid = 0;
         int tickMs = -1;
         string stage = "";
-        string hookStatus = "";
-        uint dropped = 0;
         float scoreProduct = 0.0f;
         float scoreInward = 0.0f;
         float scoreTangent = 0.0f;
@@ -55,29 +53,12 @@ namespace PhysicsBridge
 
     Net::Socket@ listenSock = null;
     Net::Socket@ clientSock = null;
-    uint16 listenPort = 0;
     string buffer = "";
     bool connected = false;
-    uint parseErrors = 0;
-    uint latestSeq = 0;
+    bool bridgeSeen = false;
     uint activeRun = 0;
     uint runCounter = 0;
-    int latestRaceMs = -1;
-    int latestRawRaceMs = -1;
-    int latestRaceOffsetMs = 2600;
-    int offsetValid = 0;
-    string hookStatus = "";
-    string hookSeen = "";
-    uint dropped = 0;
-    uint eventSeq = 0;
-    uint eventsSeen = 0;
-    uint validEvents = 0;
-    uint invalidEvents = 0;
-    uint samplesSent = 0;
-    uint commandsSeen = 0;
-    uint sampleCount = 0;
     uint64 lastReadTime = 0;
-    string lastError = "Not started";
     string pendingControlLine = "";
     BridgeSample@ latestBestSample = null;
     array<BridgeSample@> sampleSlots;
@@ -92,9 +73,8 @@ namespace PhysicsBridge
         @clientSock = null;
         buffer = "";
         connected = false;
-        listenPort = 0;
+        bridgeSeen = false;
         lastReadTime = 0;
-        lastError = "No free bridge port";
 
         for (uint16 p = PORT_FIRST; p <= PORT_LAST; p++)
         {
@@ -102,8 +82,6 @@ namespace PhysicsBridge
             if (sock.Listen("127.0.0.1", p))
             {
                 @listenSock = sock;
-                listenPort = p;
-                lastError = "";
                 return;
             }
         }
@@ -115,8 +93,7 @@ namespace PhysicsBridge
         @listenSock = null;
         buffer = "";
         connected = false;
-        listenPort = 0;
-        lastError = "Stopped";
+        bridgeSeen = false;
     }
 
     void ClearSamples()
@@ -125,9 +102,6 @@ namespace PhysicsBridge
             sampleSlots.Resize(MAX_SAMPLES);
         for (uint i = 0; i < sampleSlots.Length; i++)
             @sampleSlots[i] = null;
-        sampleCount = 0;
-        latestRaceMs = -1;
-        latestRawRaceMs = -1;
         @latestBestSample = null;
     }
 
@@ -184,8 +158,8 @@ namespace PhysicsBridge
                 @clientSock = newSock;
                 buffer = "";
                 connected = true;
+                bridgeSeen = false;
                 lastReadTime = Time::Now;
-                lastError = "";
                 SendPendingControl();
             }
             return;
@@ -193,16 +167,7 @@ namespace PhysicsBridge
 
         uint avail = clientSock.Available;
         if (avail == 0)
-        {
-            if (lastReadTime != 0 && Time::Now - lastReadTime > 5000)
-            {
-                @clientSock = null;
-                connected = false;
-                buffer = "";
-                lastError = "Bridge socket idle timeout";
-            }
             return;
-        }
 
         uint toRead = avail;
         if (buffer.Length + avail > MAX_BUFFER_SIZE)
@@ -217,9 +182,9 @@ namespace PhysicsBridge
         if (buffer.Length >= MAX_BUFFER_SIZE)
         {
             @clientSock = null;
-            connected = false;
             buffer = "";
-            lastError = "Bridge buffer overflow";
+            connected = false;
+            bridgeSeen = false;
             return;
         }
 
@@ -231,9 +196,9 @@ namespace PhysicsBridge
                 line = line.Substr(0, line.Length - 1);
             buffer = buffer.Substr(uint(newline + 1));
             if (line.Length <= MAX_LINE_SIZE)
+            {
                 ParseLine(line);
-            else
-                parseErrors++;
+            }
             newline = buffer.FindFirst("\n");
         }
     }
@@ -245,45 +210,19 @@ namespace PhysicsBridge
         clientSock.Write(pendingControlLine);
     }
 
-    string StatusText()
+    bool IsReady()
     {
-        if (@listenSock is null)
-            return "Physics bridge: debug only, ignore unless broken; " + lastError;
-        string s = "Physics bridge: debug only, ignore unless broken; listening " + Text::FormatUInt(listenPort);
-        s += connected ? ", connected" : ", disconnected";
-        if (latestRaceMs >= 0)
-            s += ", sample " + Text::FormatInt(latestRaceMs) + " ms";
-        if (latestRawRaceMs >= 0)
-            s += ", raw " + Text::FormatInt(latestRawRaceMs) + " ms";
-        s += ", offset " + Text::FormatInt(latestRaceOffsetMs);
-        if (offsetValid == 0)
-            s += " fallback";
-        s += ", cached " + Text::FormatUInt(sampleCount);
-        if (hookStatus != "")
-            s += ", hooks " + hookStatus;
-        if (hookSeen != "")
-            s += ", seen " + hookSeen;
-        s += ", run " + Text::FormatUInt(activeRun) +
-            ", events " + Text::FormatUInt(eventsSeen) +
-            ", valid " + Text::FormatUInt(validEvents) +
-            ", sent " + Text::FormatUInt(samplesSent) +
-            ", commands " + Text::FormatUInt(commandsSeen);
-        if (eventSeq > 0)
-            s += ", eventSeq " + Text::FormatUInt(eventSeq);
-        if (dropped > 0)
-            s += ", dropped " + Text::FormatUInt(dropped);
-        if (parseErrors > 0)
-            s += ", parse errors " + Text::FormatUInt(parseErrors);
-        if (lastError != "")
-            s += ", " + lastError;
-        return s;
+        PollFast();
+        return @clientSock !is null && connected && bridgeSeen;
     }
 
     bool FindSampleExactOrNear(int raceMs, BridgeSample@ &out sample, int maxAgeMs = 20)
     {
         @sample = null;
         if (FindSampleExact(raceMs, sample))
+        {
             return true;
+        }
         for (int d = 1; d <= maxAgeMs; d++)
         {
             BridgeSample@ a = null;
@@ -339,7 +278,7 @@ namespace PhysicsBridge
             string key = parts[i].Substr(0, eq);
             string value = parts[i].Substr(uint(eq + 1));
             if (key == "kind") kind = value;
-            else if (key == "seq") { sample.seq = uint(Text::ParseInt(value)); latestSeq = sample.seq; }
+            else if (key == "seq") sample.seq = uint(Text::ParseInt(value));
             else if (key == "run") sample.run = uint(Text::ParseInt(value));
             else if (key == "raceMs") sample.raceMs = int(Text::ParseInt(value));
             else if (key == "rawRaceMs") sample.rawRaceMs = int(Text::ParseInt(value));
@@ -353,15 +292,6 @@ namespace PhysicsBridge
             else if (key == "scoreExponent") sample.scoreExponent = float(Text::ParseFloat(value));
             else if (key == "scoreCorrection") sample.scoreCorrection = float(Text::ParseFloat(value));
             else if (key == "scoreContact") sample.scoreContact = float(Text::ParseFloat(value));
-            else if (key == "hookStatus") { sample.hookStatus = value; hookStatus = value; }
-            else if (key == "hookSeen") hookSeen = value;
-            else if (key == "dropped") { sample.dropped = uint(Text::ParseInt(value)); dropped = sample.dropped; }
-            else if (key == "eventSeq") eventSeq = uint(Text::ParseInt(value));
-            else if (key == "events") eventsSeen = uint(Text::ParseInt(value));
-            else if (key == "valid") validEvents = uint(Text::ParseInt(value));
-            else if (key == "invalid") invalidEvents = uint(Text::ParseInt(value));
-            else if (key == "samplesSent") samplesSent = uint(Text::ParseInt(value));
-            else if (key == "commands") commandsSeen = uint(Text::ParseInt(value));
             else if (key == "speed") sample.speed = float(Text::ParseFloat(value));
             else if (key == "deltaSpeed") sample.deltaSpeed = float(Text::ParseFloat(value));
             else if (key == "wheelContacts") sample.wheelContacts = int(Text::ParseInt(value));
@@ -392,18 +322,12 @@ namespace PhysicsBridge
 
         if (kind == "hello" || kind == "status")
         {
-            connected = true;
-            lastError = "";
-            if (sample.raceOffsetMs > 0)
-                latestRaceOffsetMs = sample.raceOffsetMs;
-            if (sample.offsetValid != 0)
-                offsetValid = sample.offsetValid;
+            bridgeSeen = true;
             return;
         }
 
         if (kind != "sample")
         {
-            parseErrors++;
             return;
         }
 
@@ -411,19 +335,13 @@ namespace PhysicsBridge
             return;
         if (sample.raceMs < 0)
         {
-            parseErrors++;
             return;
         }
 
         sample.valid = true;
-        latestRaceMs = sample.raceMs;
-        latestRawRaceMs = sample.rawRaceMs;
-        latestRaceOffsetMs = sample.raceOffsetMs;
-        offsetValid = sample.offsetValid;
+        bridgeSeen = true;
 
         uint index = uint(sample.raceMs) % MAX_SAMPLES;
-        if (sampleSlots[index] is null)
-            sampleCount++;
         @sampleSlots[index] = sample;
         if (latestBestSample is null || sample.scoreProduct >= latestBestSample.scoreProduct)
             @latestBestSample = sample;
