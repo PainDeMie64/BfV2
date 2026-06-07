@@ -39,6 +39,38 @@ namespace Scripting
     float GetCarLocalVelY(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed.y; }
     float GetCarLocalVelZ(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed.z; }
     float GetCarLocalSpeed(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed.Length(); }
+    float GetCarPrevX(SimulationManager @sim) { return sim.Dyna.PreviousState.Location.Position.x; }
+    float GetCarPrevY(SimulationManager @sim) { return sim.Dyna.PreviousState.Location.Position.y; }
+    float GetCarPrevZ(SimulationManager @sim) { return sim.Dyna.PreviousState.Location.Position.z; }
+    float GetCarPrevVelX(SimulationManager @sim) { return sim.Dyna.PreviousState.LinearSpeed.x; }
+    float GetCarPrevVelY(SimulationManager @sim) { return sim.Dyna.PreviousState.LinearSpeed.y; }
+    float GetCarPrevVelZ(SimulationManager @sim) { return sim.Dyna.PreviousState.LinearSpeed.z; }
+    float GetCarPrevAngVelPitch(SimulationManager @sim) { return sim.Dyna.PreviousState.AngularSpeed.x; }
+    float GetCarPrevAngVelYaw(SimulationManager @sim) { return sim.Dyna.PreviousState.AngularSpeed.y; }
+    float GetCarPrevAngVelRoll(SimulationManager @sim) { return sim.Dyna.PreviousState.AngularSpeed.z; }
+    float GetCarPrevLocalVelX(SimulationManager @sim) { return Math::Dot(sim.Dyna.PreviousState.LinearSpeed, sim.Dyna.PreviousState.Location.Rotation.x); }
+    float GetCarPrevLocalVelY(SimulationManager @sim) { return Math::Dot(sim.Dyna.PreviousState.LinearSpeed, sim.Dyna.PreviousState.Location.Rotation.y); }
+    float GetCarPrevLocalVelZ(SimulationManager @sim) { return Math::Dot(sim.Dyna.PreviousState.LinearSpeed, sim.Dyna.PreviousState.Location.Rotation.z); }
+    float GetCarPrevLocalSpeed(SimulationManager @sim) { return GetCarPrevLocalVel(sim).Length(); }
+    float GetCarPrevPitch(SimulationManager @sim)
+    {
+        float x, y, z;
+        sim.Dyna.PreviousState.Quat.GetYawPitchRoll(x, y, z);
+        return y;
+    }
+    float GetCarPrevYaw(SimulationManager @sim)
+    {
+        float x, y, z;
+        sim.Dyna.PreviousState.Quat.GetYawPitchRoll(x, y, z);
+        return x;
+    }
+    float GetCarPrevRoll(SimulationManager @sim)
+    {
+        float x, y, z;
+        sim.Dyna.PreviousState.Quat.GetYawPitchRoll(x, y, z);
+        return z;
+    }
+    float GetCarPrevSpeed(SimulationManager @sim) { return sim.Dyna.PreviousState.LinearSpeed.Length(); }
     float GetCarPitch(SimulationManager @sim)
     {
         float x, y, z;
@@ -62,10 +94,18 @@ namespace Scripting
     float GetCarLateralContact(SimulationManager @sim) { return sim.SceneVehicleCar.HasAnyLateralContact ? 1.0f : 0.0f; }
     float GetCarSliding(SimulationManager @sim) { return sim.SceneVehicleCar.IsSliding ? 1.0f : 0.0f; }
     float GetCarGear(SimulationManager @sim) { return sim.SceneVehicleCar.CarEngine.RearGear==1 ? -1.0f : float(sim.SceneVehicleCar.CarEngine.Gear); }
+    float GetCarRpm(SimulationManager @sim) { return sim.SceneVehicleCar.CarEngine.ActualRPM; }
+    float GetCarTurningRate(SimulationManager @sim) { return sim.SceneVehicleCar.TurningRate; }
+    float GetCarTurboType(SimulationManager @sim) { return float(sim.SceneVehicleCar.Turbo); }
+    float GetCarTurboBoostFactor(SimulationManager @sim) { return sim.SceneVehicleCar.TurboBoostFactor; }
     float GetWheelFLGroundContact(SimulationManager @sim) { return sim.Wheels.FrontLeft.RTState.HasGroundContact ? 1.0f : 0.0f; }
     float GetWheelFRGroundContact(SimulationManager @sim) { return sim.Wheels.FrontRight.RTState.HasGroundContact ? 1.0f : 0.0f; }
     float GetWheelBLGroundContact(SimulationManager @sim) { return sim.Wheels.BackLeft.RTState.HasGroundContact ? 1.0f : 0.0f; }
     float GetWheelBRGroundContact(SimulationManager @sim) { return sim.Wheels.BackRight.RTState.HasGroundContact ? 1.0f : 0.0f; }
+    float GetWheelFLSliding(SimulationManager @sim) { return sim.Wheels.FrontLeft.RTState.IsSliding ? 1.0f : 0.0f; }
+    float GetWheelFRSliding(SimulationManager @sim) { return sim.Wheels.FrontRight.RTState.IsSliding ? 1.0f : 0.0f; }
+    float GetWheelBLSliding(SimulationManager @sim) { return sim.Wheels.BackLeft.RTState.IsSliding ? 1.0f : 0.0f; }
+    float GetWheelBRSliding(SimulationManager @sim) { return sim.Wheels.BackRight.RTState.IsSliding ? 1.0f : 0.0f; }
     float GetWheelFLSurface(SimulationManager @sim) { return float(sim.Wheels.FrontLeft.RTState.ContactMaterialId); }
     float GetWheelFRSurface(SimulationManager @sim) { return float(sim.Wheels.FrontRight.RTState.ContactMaterialId); }
     float GetWheelBLSurface(SimulationManager @sim) { return float(sim.Wheels.BackLeft.RTState.ContactMaterialId); }
@@ -73,6 +113,14 @@ namespace Scripting
     vec3 GetCarPos(SimulationManager @sim) { return sim.Dyna.CurrentState.Location.Position; }
     vec3 GetCarVel(SimulationManager @sim) { return sim.Dyna.CurrentState.LinearSpeed; }
     vec3 GetCarLocalVel(SimulationManager @sim) { return sim.SceneVehicleCar.CurrentLocalSpeed; }
+    vec3 GetCarPrevPos(SimulationManager @sim) { return sim.Dyna.PreviousState.Location.Position; }
+    vec3 GetCarPrevVel(SimulationManager @sim) { return sim.Dyna.PreviousState.LinearSpeed; }
+    vec3 GetCarPrevLocalVel(SimulationManager @sim)
+    {
+        return vec3(Math::Dot(sim.Dyna.PreviousState.LinearSpeed, sim.Dyna.PreviousState.Location.Rotation.x),
+                    Math::Dot(sim.Dyna.PreviousState.LinearSpeed, sim.Dyna.PreviousState.Location.Rotation.y),
+                    Math::Dot(sim.Dyna.PreviousState.LinearSpeed, sim.Dyna.PreviousState.Location.Rotation.z));
+    }
     float GetIterationCount(SimulationManager @sim)
     {
         return float(info.Iterations);
@@ -480,6 +528,40 @@ namespace Scripting
             return GetCarLocalVelZ;
         if (lower == "car.localspeed")
             return GetCarLocalSpeed;
+        if (lower == "car.prev.position.x" || lower == "car.prev.x")
+            return GetCarPrevX;
+        if (lower == "car.prev.position.y" || lower == "car.prev.y")
+            return GetCarPrevY;
+        if (lower == "car.prev.position.z" || lower == "car.prev.z")
+            return GetCarPrevZ;
+        if (lower == "car.prev.velocity.x" || lower == "car.prev.vel.x")
+            return GetCarPrevVelX;
+        if (lower == "car.prev.velocity.y" || lower == "car.prev.vel.y")
+            return GetCarPrevVelY;
+        if (lower == "car.prev.velocity.z" || lower == "car.prev.vel.z")
+            return GetCarPrevVelZ;
+        if (lower == "car.prev.velocity.pitch" || lower == "car.prev.vel.pitch")
+            return GetCarPrevAngVelPitch;
+        if (lower == "car.prev.velocity.yaw" || lower == "car.prev.vel.yaw")
+            return GetCarPrevAngVelYaw;
+        if (lower == "car.prev.velocity.roll" || lower == "car.prev.vel.roll")
+            return GetCarPrevAngVelRoll;
+        if (lower == "car.prev.localvelocity.x" || lower == "car.prev.localvel.x")
+            return GetCarPrevLocalVelX;
+        if (lower == "car.prev.localvelocity.y" || lower == "car.prev.localvel.y")
+            return GetCarPrevLocalVelY;
+        if (lower == "car.prev.localvelocity.z" || lower == "car.prev.localvel.z")
+            return GetCarPrevLocalVelZ;
+        if (lower == "car.prev.localspeed")
+            return GetCarPrevLocalSpeed;
+        if (lower == "car.prev.rotation.pitch" || lower == "car.prev.pitch")
+            return GetCarPrevPitch;
+        if (lower == "car.prev.rotation.yaw" || lower == "car.prev.yaw")
+            return GetCarPrevYaw;
+        if (lower == "car.prev.rotation.roll" || lower == "car.prev.roll")
+            return GetCarPrevRoll;
+        if (lower == "car.prev.speed")
+            return GetCarPrevSpeed;
         if (lower == "car.rotation.pitch" || lower == "car.pitch")
             return GetCarPitch;
         if (lower == "car.rotation.yaw" || lower == "car.yaw")
@@ -492,10 +574,18 @@ namespace Scripting
             return GetCarFreewheel;
         if (lower == "car.lateralcontact")
             return GetCarLateralContact;
-        if (lower == "car.sliding")
+        if (lower == "car.sliding" || lower == "car.is_sliding" || lower == "car.is")
             return GetCarSliding;
         if (lower == "car.gear")
             return GetCarGear;
+        if (lower == "car.rpm")
+            return GetCarRpm;
+        if (lower == "car.turning_rate" || lower == "car.tr")
+            return GetCarTurningRate;
+        if (lower == "car.turbo_type" || lower == "car.tt")
+            return GetCarTurboType;
+        if (lower == "car.turbo_boost_factor" || lower == "car.tbf")
+            return GetCarTurboBoostFactor;
         if (lower == "car.wheels.frontleft.groundcontact")
             return GetWheelFLGroundContact;
         if (lower == "car.wheels.frontright.groundcontact")
@@ -504,6 +594,14 @@ namespace Scripting
             return GetWheelBLGroundContact;
         if (lower == "car.wheels.backright.groundcontact")
             return GetWheelBRGroundContact;
+        if (lower == "car.wheels.frontleft.is_sliding" || lower == "car.wheels.frontleft.is")
+            return GetWheelFLSliding;
+        if (lower == "car.wheels.frontright.is_sliding" || lower == "car.wheels.frontright.is")
+            return GetWheelFRSliding;
+        if (lower == "car.wheels.backleft.is_sliding" || lower == "car.wheels.backleft.is")
+            return GetWheelBLSliding;
+        if (lower == "car.wheels.backright.is_sliding" || lower == "car.wheels.backright.is")
+            return GetWheelBRSliding;
         if (lower == "car.wheels.frontleft.surface")
             return GetWheelFLSurface;
         if (lower == "car.wheels.frontright.surface")
@@ -557,6 +655,12 @@ namespace Scripting
             return GetCarVel;
         if (lower == "car.localvelocity" || lower == "car.localvel")
             return GetCarLocalVel;
+        if (lower == "car.prev.position" || lower == "car.prev.pos")
+            return GetCarPrevPos;
+        if (lower == "car.prev.velocity" || lower == "car.prev.vel")
+            return GetCarPrevVel;
+        if (lower == "car.prev.localvelocity" || lower == "car.prev.localvel")
+            return GetCarPrevLocalVel;
         return null;
     }
 }

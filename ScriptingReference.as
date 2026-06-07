@@ -1,5 +1,165 @@
 namespace ScriptingReference
 {
+    string playgroundCompiledSource = "";
+    string playgroundResult = "Waiting for run step.";
+    string playgroundCompileStatus = "";
+    bool playgroundCompiled = false;
+    bool playgroundIsCondition = false;
+    int playgroundLastRaceTime = -1;
+    Scripting::ConditionCallback @playgroundCondition = null;
+    Scripting::FloatGetter @playgroundValue = null;
+
+    void ResetPlaygroundProgram()
+    {
+        playgroundCompiled = false;
+        playgroundIsCondition = false;
+        playgroundCompiledSource = "";
+        playgroundResult = "Waiting for script.";
+        playgroundCompileStatus = "";
+        @playgroundCondition = null;
+        @playgroundValue = null;
+    }
+
+    bool HasComparisonOperator(const string &in line)
+    {
+        return Scripting::FindTopLevel(line, ">=") != -1
+            || Scripting::FindTopLevel(line, "<=") != -1
+            || Scripting::FindTopLevel(line, ">") != -1
+            || Scripting::FindTopLevel(line, "<") != -1
+            || Scripting::FindTopLevel(line, "=") != -1;
+    }
+
+    int CountPlayableLines(const array<string> &in lines)
+    {
+        int count = 0;
+        for (uint i = 0; i < lines.Length; i++)
+        {
+            if (Scripting::CleanSource(lines[i]) != "")
+                count++;
+        }
+        return count;
+    }
+
+    void CompilePlaygroundIfNeeded()
+    {
+        string source = Replace(GetVariableString("bf_scripting_playground_script"), ":", "\n");
+        if (source == playgroundCompiledSource)
+            return;
+
+        ResetPlaygroundProgram();
+        playgroundCompiledSource = source;
+        array<string> lines = source.Split("\n");
+        int playableLines = CountPlayableLines(lines);
+        if (playableLines == 0)
+        {
+            playgroundCompileStatus = "Enter a script to evaluate.";
+            return;
+        }
+
+        bool shouldCompileAsCondition = playableLines > 1;
+        string expressionLine = "";
+        if (playableLines == 1)
+        {
+            for (uint i = 0; i < lines.Length; i++)
+            {
+                string cleaned = Scripting::CleanSource(lines[i]);
+                if (cleaned != "")
+                {
+                    expressionLine = cleaned;
+                    shouldCompileAsCondition = HasComparisonOperator(cleaned);
+                    break;
+                }
+            }
+        }
+
+        if (shouldCompileAsCondition)
+        {
+            Scripting::ConditionCallback @condition = Scripting::CompileMulti(lines);
+            if (condition is null)
+            {
+                playgroundCompileStatus = "Compile error.";
+                playgroundResult = "No result.";
+                return;
+            }
+            @playgroundCondition = @condition;
+            playgroundIsCondition = true;
+            playgroundCompiled = true;
+            playgroundCompileStatus = "Compiled as condition.";
+            playgroundResult = "Waiting for run step.";
+            return;
+        }
+
+        Scripting::FloatGetter @value = Scripting::ParseExpression(expressionLine);
+        if (value is null)
+        {
+            playgroundCompileStatus = "Compile error.";
+            playgroundResult = "No result.";
+            return;
+        }
+        @playgroundValue = @value;
+        playgroundIsCondition = false;
+        playgroundCompiled = true;
+        playgroundCompileStatus = "Compiled as expression.";
+        playgroundResult = "Waiting for run step.";
+    }
+
+    void OnRunStep(SimulationManager @simManager)
+    {
+        if (simManager is null)
+            return;
+        CompilePlaygroundIfNeeded();
+        if (!playgroundCompiled)
+            return;
+        if (playgroundLastRaceTime == simManager.RaceTime)
+            return;
+        playgroundLastRaceTime = simManager.RaceTime;
+        if (playgroundIsCondition)
+        {
+            if (playgroundCondition is null)
+                return;
+            bool result = playgroundCondition(simManager);
+            playgroundResult = result ? "true" : "false";
+        }
+        else
+        {
+            if (playgroundValue is null)
+                return;
+            float result = playgroundValue(simManager);
+            playgroundResult = Text::FormatFloat(result, "", 0, 6);
+        }
+    }
+
+    void RenderPlayground()
+    {
+        SectionHeader("Playground");
+        string lines = Replace(GetVariableString("bf_scripting_playground_script"), ":", "\n");
+        int currentHeight = int(GetVariableDouble("bf_scripting_playground_script_height"));
+        if (currentHeight < 40)
+            currentHeight = 40;
+        if (UI::InputTextMultiline("##bf_scripting_playground_script", lines, vec2(0, currentHeight)))
+        {
+            SetVariable("bf_scripting_playground_script", Replace(lines, "\n", ":"));
+            CompilePlaygroundIfNeeded();
+        }
+        if (UI::Button("^##scripting_playground_up"))
+        {
+            if (currentHeight > 40)
+                SetVariable("bf_scripting_playground_script_height", currentHeight - 17);
+        }
+        UI::SameLine();
+        if (UI::Button("v##scripting_playground_down"))
+            SetVariable("bf_scripting_playground_script_height", currentHeight + 17);
+        UI::SameLine();
+        UI::TextDimmed(playgroundCompileStatus);
+        UI::Dummy(vec2(0, 2));
+        UI::Text("Result:");
+        UI::SameLine();
+        UI::PushStyleColor(UI::Col::Text, playgroundCompiled ? vec4(0.6, 1.0, 0.6, 1.0) : vec4(1.0, 0.45, 0.35, 1.0));
+        UI::Text(playgroundResult);
+        UI::PopStyleColor();
+        UI::Dummy(vec2(0, 6));
+    }
+
     void SectionHeader(const string &in title)
     {
         UI::Dummy(vec2(0, 6));
@@ -92,6 +252,8 @@ namespace ScriptingReference
     void Render()
     {
         copyId = 0;
+        CompilePlaygroundIfNeeded();
+        RenderPlayground();
         UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 1, 0.95));
         UI::TextWrapped("This page documents the scripting language used in Condition Scripts, Restart Condition Scripts, and Custom Target Scripts. All three share the same expression language.");
         UI::PopStyleColor();
@@ -176,6 +338,9 @@ namespace ScriptingReference
                 VarRow("car.x  /  car.position.x", "X position");
                 VarRow("car.y  /  car.position.y", "Y position (height)");
                 VarRow("car.z  /  car.position.z", "Z position");
+                VarRow("car.prev.x  /  car.prev.position.x", "Previous tick X position");
+                VarRow("car.prev.y  /  car.prev.position.y", "Previous tick Y position");
+                VarRow("car.prev.z  /  car.prev.position.z", "Previous tick Z position");
                 UI::EndTable();
             }
             SubHeader("Velocity");
@@ -194,6 +359,14 @@ namespace ScriptingReference
                 VarRow("car.localvel.y", "Y velocity, car-relative (m/s)");
                 VarRow("car.localvel.z", "Z velocity, car-relative (m/s)");
                 VarRow("car.localspeed", "Total local speed (m/s)");
+                VarRow("car.prev.vel.x  /  car.prev.velocity.x", "Previous tick X velocity, world (m/s)");
+                VarRow("car.prev.vel.y  /  car.prev.velocity.y", "Previous tick Y velocity, world (m/s)");
+                VarRow("car.prev.vel.z  /  car.prev.velocity.z", "Previous tick Z velocity, world (m/s)");
+                VarRow("car.prev.speed", "Previous tick total speed (m/s)");
+                VarRow("car.prev.localvel.x", "Previous tick X velocity, car-relative (m/s)");
+                VarRow("car.prev.localvel.y", "Previous tick Y velocity, car-relative (m/s)");
+                VarRow("car.prev.localvel.z", "Previous tick Z velocity, car-relative (m/s)");
+                VarRow("car.prev.localspeed", "Previous tick total local speed (m/s)");
                 UI::EndTable();
             }
             SubHeader("Rotation");
@@ -204,6 +377,9 @@ namespace ScriptingReference
                 VarRow("car.yaw  /  car.rotation.yaw", "Yaw angle (radians)");
                 VarRow("car.pitch  /  car.rotation.pitch", "Pitch angle (radians)");
                 VarRow("car.roll  /  car.rotation.roll", "Roll angle (radians)");
+                VarRow("car.prev.yaw  /  car.prev.rotation.yaw", "Previous tick yaw angle (radians)");
+                VarRow("car.prev.pitch  /  car.prev.rotation.pitch", "Previous tick pitch angle (radians)");
+                VarRow("car.prev.roll  /  car.prev.rotation.roll", "Previous tick roll angle (radians)");
                 UI::EndTable();
             }
             SubHeader("Vehicle State");
@@ -215,6 +391,11 @@ namespace ScriptingReference
                 VarRow("car.lateralcontact", "1 if lateral contact, 0 otherwise");
                 VarRow("car.sliding", "1 if sliding, 0 otherwise");
                 VarRow("car.gear", "Current gear (-1 = reverse)");
+                VarRow("car.rpm", "Actual engine RPM");
+                VarRow("car.turning_rate  /  car.tr", "Turning rate");
+                VarRow("car.is_sliding  /  car.is", "1 if car is sliding, 0 otherwise");
+                VarRow("car.turbo_type  /  car.tt", "0 none, 1 normal, 2 roulette");
+                VarRow("car.turbo_boost_factor  /  car.tbf", "Turbo boost factor");
                 UI::EndTable();
             }
             SubHeader("Wheels - Ground Contact");
@@ -226,6 +407,17 @@ namespace ScriptingReference
                 VarRow("car.wheels.frontright.groundcontact", "0 or 1");
                 VarRow("car.wheels.backleft.groundcontact", "0 or 1");
                 VarRow("car.wheels.backright.groundcontact", "0 or 1");
+                UI::EndTable();
+            }
+            SubHeader("Wheels - Sliding");
+            if (UI::BeginTable("##vars_wheel_sliding", 2))
+            {
+                UI::TableSetupColumn("Variable");
+                UI::TableSetupColumn("Value");
+                VarRow("car.wheels.frontleft.is_sliding  /  .is", "0 or 1");
+                VarRow("car.wheels.frontright.is_sliding  /  .is", "0 or 1");
+                VarRow("car.wheels.backleft.is_sliding  /  .is", "0 or 1");
+                VarRow("car.wheels.backright.is_sliding  /  .is", "0 or 1");
                 UI::EndTable();
             }
             SubHeader("Wheels - Surface Material");
@@ -247,6 +439,9 @@ namespace ScriptingReference
                 VarRow("car.pos  /  car.position", "Position as vec3");
                 VarRow("car.vel  /  car.velocity", "Velocity as vec3 (world)");
                 VarRow("car.localvel  /  car.localvelocity", "Velocity as vec3 (car-relative)");
+                VarRow("car.prev.pos  /  car.prev.position", "Previous tick position as vec3");
+                VarRow("car.prev.vel  /  car.prev.velocity", "Previous tick velocity as vec3 (world)");
+                VarRow("car.prev.localvel", "Previous tick velocity as vec3 (car-relative)");
                 VarRow("(x, y, z)", "Constant vec3 literal");
                 UI::EndTable();
             }

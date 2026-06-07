@@ -88,6 +88,7 @@ string HandleGetBfSettings(const string &in body)
         slots += "{" + JsonString("algorithm", algoName);
         slots += "," + JsonString("relativeAlgorithm", relativeAlgoName);
         slots += "," + JsonBool("enabled", enabled);
+        slots += "," + JsonInt("chance", GetInputModChanceSetting(suffix));
         slots += "," + JsonInt("modifyCount", int(GetVariableDouble("bf_modify_count" + suffix)));
         slots += "," + JsonInt("minTime", int(GetVariableDouble("bf_inputs_min_time" + suffix)));
         slots += "," + JsonInt("maxTime", int(GetVariableDouble("bf_inputs_max_time" + suffix)));
@@ -260,6 +261,7 @@ void EnsureSlotVariablesRegistered(int slotCount)
         RegisterVariable("bf_max_time_diff" + vs, 0);
         RegisterVariable("bf_inputs_fill_steer" + vs, false);
         RegisterVariable("bf_input_mod_enabled" + vs, true);
+        RegisterVariable("bf_input_mod_chance" + vs, 100);
         RegisterVariable("bf_input_mod_algorithm" + vs, "basic");
         RegisterVariable("bf_relative_input_mod_algorithm" + vs, "relative_basic");
         RegisterVariable("bf_range_min_input_count" + vs, 1);
@@ -310,6 +312,22 @@ void EnsureSlotVariablesRegistered(int slotCount)
         RegisterVariable("don_bf_steering_modification_radius" + vs, 0);
         RegisterVariable("don_bf_modify_steering_min_diff" + vs, 1);
         RegisterVariable("don_bf_modify_steering_max_diff" + vs, 10000);
+        RegisterVariable("bf_insert_steer_mode" + vs, "range");
+        RegisterVariable("bf_insert_steer_min" + vs, -65536);
+        RegisterVariable("bf_insert_steer_max" + vs, 65536);
+        RegisterVariable("bf_insert_steer_add_diff" + vs, 0);
+        RegisterVariable("bf_insert_steer_count" + vs, 0);
+        RegisterVariable("bf_insert_steer_hold_time" + vs, 0);
+        RegisterVariable("bf_insert_accel_count" + vs, 0);
+        RegisterVariable("bf_insert_accel_hold_time" + vs, 0);
+        RegisterVariable("bf_insert_brake_count" + vs, 0);
+        RegisterVariable("bf_insert_brake_hold_time" + vs, 0);
+        RegisterVariable("bf_delete_steer_enabled" + vs, false);
+        RegisterVariable("bf_delete_steer_count" + vs, 0);
+        RegisterVariable("bf_delete_accel_enabled" + vs, false);
+        RegisterVariable("bf_delete_accel_count" + vs, 0);
+        RegisterVariable("bf_delete_brake_enabled" + vs, false);
+        RegisterVariable("bf_delete_brake_count" + vs, 0);
     }
 }
 
@@ -335,6 +353,7 @@ string HandleGetAllSettings(const string &in body)
     json += JsonString("resultFilename", GetVariableString("bf_result_filename"));
     json += "," + JsonInt("iterationsBeforeRestart", int(GetVariableDouble("bf_iterations_before_restart")));
     json += "," + JsonInt("improvementCollectionIterations", GetImprovementCollectionIterationsSetting());
+    json += "," + JsonInt("randomSeed", GetRandomSeedSetting());
     json += "," + JsonString("resultFolder", GetVariableString("bf_result_folder"));
     json += "," + JsonBool("persistLogs", GetVariableBool("bf_dashboard_persist_logs"));
     json += "," + JsonString("restartConditionScript", GetVariableString("bf_restart_condition_script"));
@@ -363,6 +382,7 @@ string HandleGetAllSettings(const string &in body)
 
         slots += "{";
         slots += JsonBool("enabled", enabled);
+        slots += "," + JsonInt("chance", GetInputModChanceSetting(vs));
         slots += "," + JsonString("algorithm", algoId);
         slots += "," + JsonString("relativeAlgorithm", relativeAlgoId);
 
@@ -439,6 +459,28 @@ string HandleGetAllSettings(const string &in body)
         slots += "," + JsonInt("radius", int(GetVariableDouble("don_bf_steering_modification_radius" + vs)));
         slots += "," + JsonInt("minDiff", int(GetVariableDouble("don_bf_modify_steering_min_diff" + vs)));
         slots += "," + JsonInt("maxDiff", int(GetVariableDouble("don_bf_modify_steering_max_diff" + vs)));
+        slots += "}";
+
+        slots += ",\"insert\":{";
+        slots += JsonString("steerMode", GetVariableString("bf_insert_steer_mode" + vs));
+        slots += "," + JsonInt("steerMin", int(GetVariableDouble("bf_insert_steer_min" + vs)));
+        slots += "," + JsonInt("steerMax", int(GetVariableDouble("bf_insert_steer_max" + vs)));
+        slots += "," + JsonInt("steerAddDiff", int(GetVariableDouble("bf_insert_steer_add_diff" + vs)));
+        slots += "," + JsonInt("steerCount", int(GetVariableDouble("bf_insert_steer_count" + vs)));
+        slots += "," + JsonInt("steerHoldTime", int(GetVariableDouble("bf_insert_steer_hold_time" + vs)));
+        slots += "," + JsonInt("accelCount", int(GetVariableDouble("bf_insert_accel_count" + vs)));
+        slots += "," + JsonInt("accelHoldTime", int(GetVariableDouble("bf_insert_accel_hold_time" + vs)));
+        slots += "," + JsonInt("brakeCount", int(GetVariableDouble("bf_insert_brake_count" + vs)));
+        slots += "," + JsonInt("brakeHoldTime", int(GetVariableDouble("bf_insert_brake_hold_time" + vs)));
+        slots += "}";
+
+        slots += ",\"delete\":{";
+        slots += JsonBool("steerEnabled", GetVariableBool("bf_delete_steer_enabled" + vs));
+        slots += "," + JsonInt("steerCount", int(GetVariableDouble("bf_delete_steer_count" + vs)));
+        slots += "," + JsonBool("accelEnabled", GetVariableBool("bf_delete_accel_enabled" + vs));
+        slots += "," + JsonInt("accelCount", int(GetVariableDouble("bf_delete_accel_count" + vs)));
+        slots += "," + JsonBool("brakeEnabled", GetVariableBool("bf_delete_brake_enabled" + vs));
+        slots += "," + JsonInt("brakeCount", int(GetVariableDouble("bf_delete_brake_count" + vs)));
         slots += "}";
 
         slots += "}";
@@ -657,6 +699,21 @@ string HandlePostSetVar(const string &in body)
         double dval = Text::ParseFloat(value);
         if (name == "bf_improvement_collection_iterations" && dval < 0)
             dval = 0;
+        if (name == "bf_random_seed")
+        {
+            if (dval < -1) dval = -1;
+            if (dval > 2147483647) dval = 2147483647;
+        }
+        if (name.FindFirst("bf_input_mod_chance") == 0)
+        {
+            if (dval < 0) dval = 0;
+            if (dval > 100) dval = 100;
+        }
+        if (name.FindFirst("bf_insert_steer_add_diff") == 0)
+        {
+            if (dval < 0) dval = 0;
+            if (dval > 131072) dval = 131072;
+        }
         ok = SetVariable(name, dval);
     }
     else if (varType == VariableType::String)
@@ -796,6 +853,21 @@ string HandlePostSetBatch(const string &in body)
                 double dval = Text::ParseFloat(value);
                 if (name == "bf_improvement_collection_iterations" && dval < 0)
                     dval = 0;
+                if (name == "bf_random_seed")
+                {
+                    if (dval < -1) dval = -1;
+                    if (dval > 2147483647) dval = 2147483647;
+                }
+                if (name.FindFirst("bf_input_mod_chance") == 0)
+                {
+                    if (dval < 0) dval = 0;
+                    if (dval > 100) dval = 100;
+                }
+                if (name.FindFirst("bf_insert_steer_add_diff") == 0)
+                {
+                    if (dval < 0) dval = 0;
+                    if (dval > 131072) dval = 131072;
+                }
                 SetVariable(name, dval);
             }
             else if (varType == VariableType::Boolean)

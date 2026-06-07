@@ -306,9 +306,18 @@ InputModificationAlgorithm@ GetInputModAlgorithmByIdentifier(const string &in id
         return g_inputModAlgorithms[0];
     return null;
 }
-void BasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+int LabeledInputTimeVar(const string &in label, const string &in varName)
 {
-    InputModification::MutateInputs(
+    int value = UI::InputTimeVar(" ", varName);
+    UI::SameLine();
+    UI::Dummy(vec2(-20, 0));
+    UI::SameLine();
+    UI::Text(label);
+    return value;
+}
+bool BasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    return InputModification::MutateInputs(
         buffer,
         settings.inputCount,
         settings.minInputsTime,
@@ -317,9 +326,9 @@ void BasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
         settings.maxTimeDiff,
         settings.fillSteerInputs);
 }
-void RelativeBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+bool RelativeBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
-    InputModification::MutateRelativeInputs(
+    return InputModification::MutateRelativeInputs(
         buffer,
         settings.inputCount,
         settings.minInputsTime,
@@ -360,16 +369,17 @@ void BasicAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsI
     int t = UI::SliderIntVar("Maximum Steering Difference" + suffix, "bf_max_steer_diff" + varSuffix, 0, 131072);
     toolTip(300, {"Bruteforce will randomize a number between [-" + t + ", " + t + "] and add it to the current steering value."});
     UI::Dummy(vec2(0, 2));
-    int timediff = UI::InputTimeVar("Maximum Time Difference" + suffix, "bf_max_time_diff" + varSuffix);
+    int timediff = LabeledInputTimeVar("Maximum Time Difference", "bf_max_time_diff" + varSuffix);
     UI::PopItemWidth();
     toolTip(300, {"Bruteforce will randomize a number between [-" + timediff + ", " + timediff + "] milliseconds and add it to the current time value."});
     UI::CheckboxVar("Fill Missing Steering Input" + suffix, "bf_inputs_fill_steer" + varSuffix);
     toolTip(300, {"Timestamps with no steering input changes will be filled with existing values "
                   "resulting in more values that can be changed."});
 }
-void AdvancedBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+bool AdvancedBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
     string varSuffix = GetInputModVarSuffix(settingsIndex);
+    bool mutated = false;
     int steerCount = int(GetVariableDouble("bf_adv_steer_modify_count" + varSuffix));
     int steerMinTime = int(GetVariableDouble("bf_adv_steer_min_time" + varSuffix));
     int steerMaxTime = int(GetVariableDouble("bf_adv_steer_max_time" + varSuffix));
@@ -378,7 +388,7 @@ void AdvancedBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
     bool steerFill = GetVariableBool("bf_adv_steer_fill" + varSuffix);
     if (steerCount > 0)
     {
-        InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.SteerId), steerCount, steerMinTime, steerMaxTime, steerMaxDiff, steerMaxTimeDiff, steerFill, false);
+        mutated = InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.SteerId), steerCount, steerMinTime, steerMaxTime, steerMaxDiff, steerMaxTimeDiff, steerFill, false) || mutated;
     }
     int accelCount = int(GetVariableDouble("bf_adv_accel_modify_count" + varSuffix));
     int accelMinTime = int(GetVariableDouble("bf_adv_accel_min_time" + varSuffix));
@@ -386,7 +396,7 @@ void AdvancedBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
     int accelMaxTimeDiff = int(GetVariableDouble("bf_adv_accel_max_time_diff" + varSuffix));
     if (accelCount > 0)
     {
-        InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.AccelerateId), accelCount, accelMinTime, accelMaxTime, 0, accelMaxTimeDiff, false, true);
+        mutated = InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.AccelerateId), accelCount, accelMinTime, accelMaxTime, 0, accelMaxTimeDiff, false, true) || mutated;
     }
     int brakeCount = int(GetVariableDouble("bf_adv_brake_modify_count" + varSuffix));
     int brakeMinTime = int(GetVariableDouble("bf_adv_brake_min_time" + varSuffix));
@@ -394,8 +404,9 @@ void AdvancedBasicAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
     int brakeMaxTimeDiff = int(GetVariableDouble("bf_adv_brake_max_time_diff" + varSuffix));
     if (brakeCount > 0)
     {
-        InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.BrakeId), brakeCount, brakeMinTime, brakeMaxTime, 0, brakeMaxTimeDiff, false, true);
+        mutated = InputModification::MutateInputsByType(buffer, int(buffer.EventIndices.BrakeId), brakeCount, brakeMinTime, brakeMaxTime, 0, brakeMaxTimeDiff, false, true) || mutated;
     }
+    return mutated;
 }
 void AdvancedBasicAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
 {
@@ -507,9 +518,10 @@ void AdvancedBasicAlgorithm_RenderUI(InputModificationSettings @settings, uint s
     UI::PopItemWidth();
     UI::PopID();
 }
-void AdvancedRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+bool AdvancedRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
     string varSuffix = GetInputModVarSuffix(settingsIndex);
+    bool mutated = false;
     int steerMinCount = int(GetVariableDouble("bf_advr_steer_min_input_count" + varSuffix));
     int steerMaxCount = int(GetVariableDouble("bf_advr_steer_max_input_count" + varSuffix));
     int steerMinTime = int(GetVariableDouble("bf_advr_steer_min_time" + varSuffix));
@@ -521,7 +533,7 @@ void AdvancedRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
     bool steerFill = GetVariableBool("bf_advr_steer_fill" + varSuffix);
     if (steerMinCount > 0 || steerMaxCount > 0)
     {
-        InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.SteerId), steerMinCount, steerMaxCount, steerMinTime, steerMaxTime, steerMinSteer, steerMaxSteer, steerMinTimeDiff, steerMaxTimeDiff, steerFill, false);
+        mutated = InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.SteerId), steerMinCount, steerMaxCount, steerMinTime, steerMaxTime, steerMinSteer, steerMaxSteer, steerMinTimeDiff, steerMaxTimeDiff, steerFill, false) || mutated;
     }
     int accelMinCount = int(GetVariableDouble("bf_advr_accel_min_input_count" + varSuffix));
     int accelMaxCount = int(GetVariableDouble("bf_advr_accel_max_input_count" + varSuffix));
@@ -531,7 +543,7 @@ void AdvancedRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
     int accelMaxTimeDiff = int(GetVariableDouble("bf_advr_accel_max_time_diff" + varSuffix));
     if (accelMinCount > 0 || accelMaxCount > 0)
     {
-        InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.AccelerateId), accelMinCount, accelMaxCount, accelMinTime, accelMaxTime, 0, 0, accelMinTimeDiff, accelMaxTimeDiff, false, true);
+        mutated = InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.AccelerateId), accelMinCount, accelMaxCount, accelMinTime, accelMaxTime, 0, 0, accelMinTimeDiff, accelMaxTimeDiff, false, true) || mutated;
     }
     int brakeMinCount = int(GetVariableDouble("bf_advr_brake_min_input_count" + varSuffix));
     int brakeMaxCount = int(GetVariableDouble("bf_advr_brake_max_input_count" + varSuffix));
@@ -541,8 +553,9 @@ void AdvancedRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
     int brakeMaxTimeDiff = int(GetVariableDouble("bf_advr_brake_max_time_diff" + varSuffix));
     if (brakeMinCount > 0 || brakeMaxCount > 0)
     {
-        InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.BrakeId), brakeMinCount, brakeMaxCount, brakeMinTime, brakeMaxTime, 0, 0, brakeMinTimeDiff, brakeMaxTimeDiff, false, true);
+        mutated = InputModification::MutateInputsRangeByType(buffer, int(buffer.EventIndices.BrakeId), brakeMinCount, brakeMaxCount, brakeMinTime, brakeMaxTime, 0, 0, brakeMinTimeDiff, brakeMaxTimeDiff, false, true) || mutated;
     }
+    return mutated;
 }
 void AdvancedRangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
 {
@@ -811,6 +824,8 @@ void InitializeInputModAlgorithms()
         RegisterInputModAlgorithm("advanced_basic", "Advanced Basic", AdvancedBasicAlgorithm_Mutate, AdvancedBasicAlgorithm_RenderUI);
         RegisterInputModAlgorithm("advanced_range", "Advanced Range", AdvancedRangeAlgorithm_Mutate, AdvancedRangeAlgorithm_RenderUI);
         RegisterInputModAlgorithm("smooth_steering", "Smooth Steering", SmoothSteering_Mutate, SmoothSteering_RenderUI);
+        RegisterInputModAlgorithm("insert", "Insert", InsertAlgorithm_Mutate, InsertAlgorithm_RenderUI);
+        RegisterInputModAlgorithm("delete", "Delete", DeleteAlgorithm_Mutate, DeleteAlgorithm_RenderUI);
         RegisterInputModAlgorithm("relative_basic", "Relative Basic", RelativeBasicAlgorithm_Mutate, BasicAlgorithm_RenderUI, true);
         RegisterInputModAlgorithm("relative_range", "Relative Range", RelativeRangeAlgorithm_Mutate, RangeAlgorithm_RenderUI, true);
     }
@@ -852,7 +867,7 @@ void FillMissingSteerInputs(TM::InputEventBuffer@ buffer, int minTime, int maxTi
         }
     }
 }
-void SmoothSteering_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+bool SmoothSteering_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
     string varSuffix = GetInputModVarSuffix(settingsIndex);
     int minTime = int(GetVariableDouble("don_bf_modify_steering_min_time" + varSuffix));
@@ -862,6 +877,8 @@ void SmoothSteering_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
     int maxRadius = int(GetVariableDouble("don_bf_steering_modification_radius" + varSuffix)) / 10;
     int minDiff = int(GetVariableDouble("don_bf_modify_steering_min_diff" + varSuffix));
     int maxDiff = int(GetVariableDouble("don_bf_modify_steering_max_diff" + varSuffix));
+    if (buffer is null || maxTime < minTime || maxAmount < 1 || maxDiff < 1)
+        return false;
 
     // Fill missing steer inputs in the active time range
     FillMissingSteerInputs(buffer, minTime, maxTime);
@@ -902,6 +919,7 @@ void SmoothSteering_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
         }
     }
     InputModification::SortAndNormalizeBuffer(buffer);
+    return n > 0;
 }
 void SmoothSteering_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
 {
@@ -985,7 +1003,7 @@ void SmoothSteering_RenderUI(InputModificationSettings @settings, uint settingsI
     UI::Dummy(vec2(0, 5));
     UI::PopID();
 }
-void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+bool RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
     string varSuffix = GetInputModVarSuffix(settingsIndex);
     int minInputCount = int(GetVariableDouble("bf_range_min_input_count" + varSuffix));
@@ -994,7 +1012,7 @@ void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
     int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
     int maxTimeDiff = int(GetVariableDouble("bf_range_max_time_diff" + varSuffix));
     bool fillInputs = GetVariableBool("bf_range_fill_steer" + varSuffix);
-    InputModification::MutateInputsRange(
+    return InputModification::MutateInputsRange(
         buffer,
         minInputCount,
         maxInputCount,
@@ -1005,7 +1023,7 @@ void RangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettin
         maxTimeDiff,
         fillInputs);
 }
-void RelativeRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+bool RelativeRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
 {
     string varSuffix = GetInputModVarSuffix(settingsIndex);
     int minInputCount = int(GetVariableDouble("bf_range_min_input_count" + varSuffix));
@@ -1014,7 +1032,7 @@ void RelativeRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
     int maxSteer = int(GetVariableDouble("bf_range_max_steer" + varSuffix));
     int maxTimeDiff = int(GetVariableDouble("bf_range_max_time_diff" + varSuffix));
     bool fillInputs = GetVariableBool("bf_range_fill_steer" + varSuffix);
-    InputModification::MutateRelativeInputsRange(
+    return InputModification::MutateRelativeInputsRange(
         buffer,
         minInputCount,
         maxInputCount,
@@ -1024,6 +1042,140 @@ void RelativeRangeAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificati
         maxSteer,
         maxTimeDiff,
         fillInputs);
+}
+bool InsertAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    int steerAddDiff = int(GetVariableDouble("bf_insert_steer_add_diff" + varSuffix));
+    if (steerAddDiff < 0)
+    {
+        steerAddDiff = 0;
+        SetVariable("bf_insert_steer_add_diff" + varSuffix, 0);
+    }
+    if (steerAddDiff > 131072)
+    {
+        steerAddDiff = 131072;
+        SetVariable("bf_insert_steer_add_diff" + varSuffix, 131072);
+    }
+    return InputModification::InsertInputs(
+        buffer,
+        settings.minInputsTime,
+        settings.maxInputsTime,
+        GetVariableString("bf_insert_steer_mode" + varSuffix),
+        int(GetVariableDouble("bf_insert_steer_min" + varSuffix)),
+        int(GetVariableDouble("bf_insert_steer_max" + varSuffix)),
+        steerAddDiff,
+        int(GetVariableDouble("bf_insert_steer_count" + varSuffix)),
+        int(GetVariableDouble("bf_insert_steer_hold_time" + varSuffix)),
+        int(GetVariableDouble("bf_insert_accel_count" + varSuffix)),
+        int(GetVariableDouble("bf_insert_accel_hold_time" + varSuffix)),
+        int(GetVariableDouble("bf_insert_brake_count" + varSuffix)),
+        int(GetVariableDouble("bf_insert_brake_hold_time" + varSuffix)));
+}
+void InsertAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
+{
+    UI::PushID("insert_" + settingsIndex);
+    if (UI::BeginTable("##insert_time" + suffix, 1))
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::Text("From");
+        UI::SameLine();
+        UI::Dummy(vec2(18, 0));
+        UI::SameLine();
+        UI::PushItemWidth(195);
+        UI::InputTimeVar("##bf_insert_min_time" + suffix, "bf_inputs_min_time" + varSuffix);
+        UI::PopItemWidth();
+        UI::Text("To");
+        UI::SameLine();
+        UI::Dummy(vec2(37, 0));
+        UI::SameLine();
+        UI::PushItemWidth(195);
+        UI::InputTimeVar("##bf_insert_max_time" + suffix, "bf_inputs_max_time" + varSuffix);
+        UI::PopItemWidth();
+        UI::EndTable();
+    }
+    if (UI::CollapsingHeader("Steering Insert" + suffix))
+    {
+        string mode = GetVariableString("bf_insert_steer_mode" + varSuffix);
+        if (mode != "add") mode = "range";
+        if (UI::BeginCombo("Steer Mode" + suffix, mode))
+        {
+            if (UI::Selectable("range", mode == "range")) SetVariable("bf_insert_steer_mode" + varSuffix, "range");
+            if (UI::Selectable("add", mode == "add")) SetVariable("bf_insert_steer_mode" + varSuffix, "add");
+            UI::EndCombo();
+        }
+        UI::InputIntVar("Max Steering Insert Count" + suffix, "bf_insert_steer_count" + varSuffix, 1);
+        if (GetVariableString("bf_insert_steer_mode" + varSuffix) == "add")
+        {
+            int addDiff = UI::SliderIntVar("Steering Add Difference" + suffix, "bf_insert_steer_add_diff" + varSuffix, 0, 131072);
+            if (addDiff < 0) SetVariable("bf_insert_steer_add_diff" + varSuffix, 0);
+            if (addDiff > 131072) SetVariable("bf_insert_steer_add_diff" + varSuffix, 131072);
+        }
+        else
+        {
+            UI::InputIntVar("Min Steering Value" + suffix, "bf_insert_steer_min" + varSuffix, 1);
+            UI::InputIntVar("Max Steering Value" + suffix, "bf_insert_steer_max" + varSuffix, 1);
+        }
+        LabeledInputTimeVar("Max Steering Held Time", "bf_insert_steer_hold_time" + varSuffix);
+    }
+    if (UI::CollapsingHeader("Acceleration Toggle Insert" + suffix))
+    {
+        UI::InputIntVar("Max Accel. Toggle Insert Count" + suffix, "bf_insert_accel_count" + varSuffix, 1);
+        LabeledInputTimeVar("Max Accel. Toggle Held Time", "bf_insert_accel_hold_time" + varSuffix);
+    }
+    if (UI::CollapsingHeader("Brake Toggle Insert" + suffix))
+    {
+        UI::InputIntVar("Max Brake Toggle Insert Count" + suffix, "bf_insert_brake_count" + varSuffix, 1);
+        LabeledInputTimeVar("Max Brake Toggle Held Time", "bf_insert_brake_hold_time" + varSuffix);
+    }
+    UI::PopID();
+}
+bool DeleteAlgorithm_Mutate(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex)
+{
+    if (buffer is null)
+        return false;
+    string varSuffix = GetInputModVarSuffix(settingsIndex);
+    auto indices = buffer.EventIndices;
+    bool mutated = false;
+    if (GetVariableBool("bf_delete_steer_enabled" + varSuffix))
+        mutated = InputModification::DeleteInputsByType(buffer, int(indices.SteerId), int(GetVariableDouble("bf_delete_steer_count" + varSuffix)), settings.minInputsTime, settings.maxInputsTime) || mutated;
+    if (GetVariableBool("bf_delete_accel_enabled" + varSuffix))
+        mutated = InputModification::DeleteInputsByType(buffer, int(indices.AccelerateId), int(GetVariableDouble("bf_delete_accel_count" + varSuffix)), settings.minInputsTime, settings.maxInputsTime) || mutated;
+    if (GetVariableBool("bf_delete_brake_enabled" + varSuffix))
+        mutated = InputModification::DeleteInputsByType(buffer, int(indices.BrakeId), int(GetVariableDouble("bf_delete_brake_count" + varSuffix)), settings.minInputsTime, settings.maxInputsTime) || mutated;
+    return mutated;
+}
+void DeleteAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
+{
+    UI::PushID("delete_" + settingsIndex);
+    if (UI::BeginTable("##delete_time" + suffix, 1))
+    {
+        UI::TableNextRow();
+        UI::TableSetColumnIndex(0);
+        UI::Text("From");
+        UI::SameLine();
+        UI::Dummy(vec2(18, 0));
+        UI::SameLine();
+        UI::PushItemWidth(195);
+        UI::InputTimeVar("##bf_delete_min_time" + suffix, "bf_inputs_min_time" + varSuffix);
+        UI::PopItemWidth();
+        UI::Text("To");
+        UI::SameLine();
+        UI::Dummy(vec2(37, 0));
+        UI::SameLine();
+        UI::PushItemWidth(195);
+        UI::InputTimeVar("##bf_delete_max_time" + suffix, "bf_inputs_max_time" + varSuffix);
+        UI::PopItemWidth();
+        UI::EndTable();
+    }
+    UI::CheckboxVar("Delete Steering" + suffix, "bf_delete_steer_enabled" + varSuffix);
+    UI::InputIntVar("Max Steering Delete Count" + suffix, "bf_delete_steer_count" + varSuffix, 1);
+    UI::CheckboxVar("Delete Acceleration" + suffix, "bf_delete_accel_enabled" + varSuffix);
+    UI::InputIntVar("Max Acceleration Delete Count" + suffix, "bf_delete_accel_count" + varSuffix, 1);
+    UI::CheckboxVar("Delete Brake" + suffix, "bf_delete_brake_enabled" + varSuffix);
+    UI::InputIntVar("Max Brake Delete Count" + suffix, "bf_delete_brake_count" + varSuffix, 1);
+    UI::PopID();
 }
 void RangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix)
 {
@@ -1101,7 +1253,7 @@ void RangeAlgorithm_RenderUI(InputModificationSettings @settings, uint settingsI
     if (maxSteer > 65536) SetVariable("bf_range_max_steer" + varSuffix, 65536);
     if (minSteer > maxSteer) SetVariable("bf_range_min_steer" + varSuffix, maxSteer);
     UI::Dummy(vec2(0, 2));
-    UI::InputTimeVar("Maximum Time Difference" + suffix, "bf_range_max_time_diff" + varSuffix);
+    LabeledInputTimeVar("Maximum Time Difference", "bf_range_max_time_diff" + varSuffix);
     toolTip(300, {"Time offset will be randomly chosen between negative and positive max time difference."});
     UI::Dummy(vec2(0, 2));
     UI::CheckboxVar("Fill Missing Steering Input" + suffix, "bf_range_fill_steer" + varSuffix);
@@ -1119,6 +1271,7 @@ class InputModificationSettings
     int maxSteerDiff = 0;
     int maxTimeDiff = 0;
     bool fillSteerInputs = false;
+    int chancePercent = 100;
     int algorithmIndex = 0; 
     bool relativeSteeringEnabled = false;
     InputModificationSettings() {}
@@ -1131,6 +1284,7 @@ class InputModificationSettings
         maxSteerDiff = steerDiff;
         maxTimeDiff = timeDiff;
         fillSteerInputs = fill;
+        chancePercent = 100;
         algorithmIndex = 0;
         relativeSteeringEnabled = false;
     }
@@ -1178,6 +1332,7 @@ void ReadInputModificationSettings(InputModificationSettings @settings, uint set
     settings.maxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
     settings.maxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
     settings.fillSteerInputs = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
+    settings.chancePercent = GetInputModChanceSetting(varSuffix);
     settings.enabled = (settingsIndex == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
     settings.relativeSteeringEnabled = relativeMode;
     settings.algorithmIndex = GetInputModAlgorithmIndexForMode(algoId, relativeMode);
@@ -1197,6 +1352,7 @@ void AddInputModificationSettings()
         SetVariable("bf_max_steer_diff" + newSuffix, GetVariableDouble("bf_max_steer_diff" + lastSuffix));
         SetVariable("bf_max_time_diff" + newSuffix, GetVariableDouble("bf_max_time_diff" + lastSuffix));
         SetVariable("bf_inputs_fill_steer" + newSuffix, GetVariableBool("bf_inputs_fill_steer" + lastSuffix));
+        SetVariable("bf_input_mod_chance" + newSuffix, GetVariableDouble("bf_input_mod_chance" + lastSuffix));
         SetVariable("bf_input_mod_algorithm" + newSuffix, GetVariableString("bf_input_mod_algorithm" + lastSuffix));
         SetVariable("bf_relative_input_mod_algorithm" + newSuffix, GetVariableString("bf_relative_input_mod_algorithm" + lastSuffix));
         SetVariable("bf_range_min_input_count" + newSuffix, GetVariableDouble("bf_range_min_input_count" + lastSuffix));
@@ -1240,6 +1396,22 @@ void AddInputModificationSettings()
         SetVariable("bf_advr_brake_max_time" + newSuffix, GetVariableDouble("bf_advr_brake_max_time" + lastSuffix));
         SetVariable("bf_advr_brake_min_time_diff" + newSuffix, GetVariableDouble("bf_advr_brake_min_time_diff" + lastSuffix));
         SetVariable("bf_advr_brake_max_time_diff" + newSuffix, GetVariableDouble("bf_advr_brake_max_time_diff" + lastSuffix));
+        SetVariable("bf_insert_steer_mode" + newSuffix, GetVariableString("bf_insert_steer_mode" + lastSuffix));
+        SetVariable("bf_insert_steer_min" + newSuffix, GetVariableDouble("bf_insert_steer_min" + lastSuffix));
+        SetVariable("bf_insert_steer_max" + newSuffix, GetVariableDouble("bf_insert_steer_max" + lastSuffix));
+        SetVariable("bf_insert_steer_add_diff" + newSuffix, GetVariableDouble("bf_insert_steer_add_diff" + lastSuffix));
+        SetVariable("bf_insert_steer_count" + newSuffix, GetVariableDouble("bf_insert_steer_count" + lastSuffix));
+        SetVariable("bf_insert_steer_hold_time" + newSuffix, GetVariableDouble("bf_insert_steer_hold_time" + lastSuffix));
+        SetVariable("bf_insert_accel_count" + newSuffix, GetVariableDouble("bf_insert_accel_count" + lastSuffix));
+        SetVariable("bf_insert_accel_hold_time" + newSuffix, GetVariableDouble("bf_insert_accel_hold_time" + lastSuffix));
+        SetVariable("bf_insert_brake_count" + newSuffix, GetVariableDouble("bf_insert_brake_count" + lastSuffix));
+        SetVariable("bf_insert_brake_hold_time" + newSuffix, GetVariableDouble("bf_insert_brake_hold_time" + lastSuffix));
+        SetVariable("bf_delete_steer_enabled" + newSuffix, GetVariableBool("bf_delete_steer_enabled" + lastSuffix));
+        SetVariable("bf_delete_steer_count" + newSuffix, GetVariableDouble("bf_delete_steer_count" + lastSuffix));
+        SetVariable("bf_delete_accel_enabled" + newSuffix, GetVariableBool("bf_delete_accel_enabled" + lastSuffix));
+        SetVariable("bf_delete_accel_count" + newSuffix, GetVariableDouble("bf_delete_accel_count" + lastSuffix));
+        SetVariable("bf_delete_brake_enabled" + newSuffix, GetVariableBool("bf_delete_brake_enabled" + lastSuffix));
+        SetVariable("bf_delete_brake_count" + newSuffix, GetVariableDouble("bf_delete_brake_count" + lastSuffix));
         if (newIndex > 0)
             SetVariable("bf_input_mod_enabled" + newSuffix, true);
     }
@@ -1264,6 +1436,7 @@ void RemoveInputModificationSettings(uint index)
             SetVariable("bf_max_steer_diff" + dstSuffix, GetVariableDouble("bf_max_steer_diff" + srcSuffix));
             SetVariable("bf_max_time_diff" + dstSuffix, GetVariableDouble("bf_max_time_diff" + srcSuffix));
             SetVariable("bf_inputs_fill_steer" + dstSuffix, GetVariableBool("bf_inputs_fill_steer" + srcSuffix));
+            SetVariable("bf_input_mod_chance" + dstSuffix, GetVariableDouble("bf_input_mod_chance" + srcSuffix));
             SetVariable("bf_input_mod_algorithm" + dstSuffix, GetVariableString("bf_input_mod_algorithm" + srcSuffix));
             SetVariable("bf_relative_input_mod_algorithm" + dstSuffix, GetVariableString("bf_relative_input_mod_algorithm" + srcSuffix));
             SetVariable("bf_range_min_input_count" + dstSuffix, GetVariableDouble("bf_range_min_input_count" + srcSuffix));
@@ -1307,6 +1480,22 @@ void RemoveInputModificationSettings(uint index)
             SetVariable("bf_advr_brake_max_time" + dstSuffix, GetVariableDouble("bf_advr_brake_max_time" + srcSuffix));
             SetVariable("bf_advr_brake_min_time_diff" + dstSuffix, GetVariableDouble("bf_advr_brake_min_time_diff" + srcSuffix));
             SetVariable("bf_advr_brake_max_time_diff" + dstSuffix, GetVariableDouble("bf_advr_brake_max_time_diff" + srcSuffix));
+            SetVariable("bf_insert_steer_mode" + dstSuffix, GetVariableString("bf_insert_steer_mode" + srcSuffix));
+            SetVariable("bf_insert_steer_min" + dstSuffix, GetVariableDouble("bf_insert_steer_min" + srcSuffix));
+            SetVariable("bf_insert_steer_max" + dstSuffix, GetVariableDouble("bf_insert_steer_max" + srcSuffix));
+            SetVariable("bf_insert_steer_add_diff" + dstSuffix, GetVariableDouble("bf_insert_steer_add_diff" + srcSuffix));
+            SetVariable("bf_insert_steer_count" + dstSuffix, GetVariableDouble("bf_insert_steer_count" + srcSuffix));
+            SetVariable("bf_insert_steer_hold_time" + dstSuffix, GetVariableDouble("bf_insert_steer_hold_time" + srcSuffix));
+            SetVariable("bf_insert_accel_count" + dstSuffix, GetVariableDouble("bf_insert_accel_count" + srcSuffix));
+            SetVariable("bf_insert_accel_hold_time" + dstSuffix, GetVariableDouble("bf_insert_accel_hold_time" + srcSuffix));
+            SetVariable("bf_insert_brake_count" + dstSuffix, GetVariableDouble("bf_insert_brake_count" + srcSuffix));
+            SetVariable("bf_insert_brake_hold_time" + dstSuffix, GetVariableDouble("bf_insert_brake_hold_time" + srcSuffix));
+            SetVariable("bf_delete_steer_enabled" + dstSuffix, GetVariableBool("bf_delete_steer_enabled" + srcSuffix));
+            SetVariable("bf_delete_steer_count" + dstSuffix, GetVariableDouble("bf_delete_steer_count" + srcSuffix));
+            SetVariable("bf_delete_accel_enabled" + dstSuffix, GetVariableBool("bf_delete_accel_enabled" + srcSuffix));
+            SetVariable("bf_delete_accel_count" + dstSuffix, GetVariableDouble("bf_delete_accel_count" + srcSuffix));
+            SetVariable("bf_delete_brake_enabled" + dstSuffix, GetVariableBool("bf_delete_brake_enabled" + srcSuffix));
+            SetVariable("bf_delete_brake_count" + dstSuffix, GetVariableDouble("bf_delete_brake_count" + srcSuffix));
             if (i > 0)
                 SetVariable("bf_input_mod_enabled" + dstSuffix, GetVariableBool("bf_input_mod_enabled" + srcSuffix));
         }
@@ -1314,20 +1503,38 @@ void RemoveInputModificationSettings(uint index)
         SetVariable("bf_input_mod_count", int(g_inputModSettings.Length));
     }
 }
-void MutateAllInputs(TM::InputEventBuffer @buffer)
+bool MutateAllInputs(TM::InputEventBuffer @buffer)
 {
     InputModification::g_earliestMutationTime = 2147483647;
-    for (uint im = 0; im < g_inputModSettings.Length; im++)
+    if (buffer is null)
+        return false;
+
+    for (int pass = 0; pass < 10; pass++)
     {
-        InputModificationSettings @settings = g_inputModSettings[im];
-        if (!settings.enabled)
-            continue;
-        InputModificationAlgorithm @algo = settings.GetAlgorithm();
-        if (algo !is null && algo.mutateCallback !is null)
+        bool anySelected = false;
+        bool anyMutated = false;
+        for (uint im = 0; im < g_inputModSettings.Length; im++)
         {
-            algo.mutateCallback(buffer, settings, im);
+            InputModificationSettings @settings = g_inputModSettings[im];
+            if (!settings.enabled)
+                continue;
+            int chance = settings.chancePercent;
+            if (chance <= 0)
+                continue;
+            if (chance < 100 && Math::Rand(1, 100) > chance)
+                continue;
+            anySelected = true;
+            InputModificationAlgorithm @algo = settings.GetAlgorithm();
+            if (algo !is null && algo.mutateCallback !is null)
+                anyMutated = algo.mutateCallback(buffer, settings, im) || anyMutated;
         }
+        if (anySelected)
+            return anyMutated;
     }
+    print("Input modification chance warning: no enabled input modification was selected after 10 passes. Your chance values are probably too low.", Severity::Warning);
+    DashboardLog("Input modification chance warning: no slot selected after 10 passes");
+    InputModification::g_earliestMutationTime = leastMinInputsTime;
+    return false;
 }
 int GetInputModEffectiveMinTime(InputModificationSettings @settings, uint settingsIndex)
 {
@@ -1526,6 +1733,45 @@ int GetImprovementCollectionIterationsSetting()
         value = 0;
     }
     return value;
+}
+int GetInputModChanceSetting(const string &in varSuffix)
+{
+    int value = int(GetVariableDouble("bf_input_mod_chance" + varSuffix));
+    if (value < 0)
+    {
+        SetVariable("bf_input_mod_chance" + varSuffix, 0);
+        value = 0;
+    }
+    if (value > 100)
+    {
+        SetVariable("bf_input_mod_chance" + varSuffix, 100);
+        value = 100;
+    }
+    return value;
+}
+int GetRandomSeedSetting()
+{
+    int value = int(GetVariableDouble("bf_random_seed"));
+    if (value < -1)
+    {
+        SetVariable("bf_random_seed", -1);
+        value = -1;
+    }
+    if (value > 2147483647)
+    {
+        SetVariable("bf_random_seed", 2147483647);
+        value = 2147483647;
+    }
+    return value;
+}
+int ResolveBfRandomSeed()
+{
+    int configuredSeed = GetRandomSeedSetting();
+    int resolvedSeed = configuredSeed;
+    if (configuredSeed == -1)
+        resolvedSeed = Math::Rand(0, 2147483647);
+    SetVariable("random_seed", resolvedSeed);
+    return resolvedSeed;
 }
 bool IsImprovementCollectionSupportedByCurrentTarget()
 {
@@ -1755,7 +2001,9 @@ void StartNextSearchAttempt(SimulationManager @simManager)
     {
         RestoreBestInputs(simManager);
     }
-    MutateAllInputs(simManager.InputEvents);
+    bool mutated = MutateAllInputs(simManager.InputEvents);
+    if (!mutated)
+        InputModification::g_earliestMutationTime = leastMinInputsTime;
     simManager.RewindToState(FindNearestCachedState(InputModification::g_earliestMutationTime));
     PhysicsBridge::ClearSamples();
     info.Rewinded = true;
@@ -1787,6 +2035,7 @@ void OnSimulationBegin(SimulationManager @simManager)
     }
     if (!IsBfV2Active)
         return;
+    int activeRandomSeed = ResolveBfRandomSeed();
     PhysicsBridge::ClearSamples();
     PhysicsBridge::PollForRace(simManager.RaceTime);
     @current = @GetBruteforceTarget();
@@ -1871,6 +2120,7 @@ void OnSimulationBegin(SimulationManager @simManager)
     bool startupCollectionSupported = IsImprovementCollectionSupportedByCurrentTarget();
     print("Bruteforce V2 started with settings:");
     print(" - Target: " + current.title);
+    print("Using random seed: " + activeRandomSeed + ". Specify this seed in the Behavior section to get the same bruteforce results again.");
     print(" - Relative Steering Algorithms: " + (GetVariableBool("bf_relative_steering_enabled") ? "Enabled" : "Disabled"));
     for (uint im = 0; im < g_inputModSettings.Length; im++)
     {
@@ -1880,6 +2130,7 @@ void OnSimulationBegin(SimulationManager @simManager)
         string algoName = (algo !is null) ? algo.name : "Unknown";
         print(" - Input Modification #" + (im + 1) + enabledStr + " (" + algoName + "):");
         string varSuffix = GetInputModVarSuffix(im);
+        print("   - Chance: " + settings.chancePercent + "%");
         if (algo !is null && (algo.identifier == "range" || algo.identifier == "relative_range"))
         {
             int minInputCount = int(GetVariableDouble("bf_range_min_input_count" + varSuffix));
@@ -1965,6 +2216,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
         return;
     PhysicsBridge::PollForRace(simManager.RaceTime);
     ViewerCapturePhaseStep(simManager);
+    ScriptingReference::OnRunStep(simManager);
     if (current !is null && current.onRunStep !is null)
         current.onRunStep(simManager);
     bool r1 = restartIterations > 0 && int(info.Iterations) >= restartIterations;
@@ -2148,13 +2400,14 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             int newMaxSteerDiff = int(GetVariableDouble("bf_max_steer_diff" + varSuffix));
             int newMaxTimeDiff = int(GetVariableDouble("bf_max_time_diff" + varSuffix));
             bool newFill = GetVariableBool("bf_inputs_fill_steer" + varSuffix);
+            int newChance = GetInputModChanceSetting(varSuffix);
             bool newEnabled = (im == 0) || GetVariableBool("bf_input_mod_enabled" + varSuffix);
             bool newRelativeMode = GetVariableBool("bf_relative_steering_enabled");
             string newAlgoId = GetInputModActiveAlgorithmId(varSuffix, newRelativeMode);
             int newAlgoIdx = GetInputModAlgorithmIndexForMode(newAlgoId, newRelativeMode);
             bool slotSettingsChanged = s.inputCount != newInputCount || s.minInputsTime != newMinTime || s.configuredMaxInputsTime != newMaxTime
                 || s.maxSteerDiff != newMaxSteerDiff || s.maxTimeDiff != newMaxTimeDiff
-                || s.fillSteerInputs != newFill || s.enabled != newEnabled || s.algorithmIndex != newAlgoIdx
+                || s.fillSteerInputs != newFill || s.chancePercent != newChance || s.enabled != newEnabled || s.algorithmIndex != newAlgoIdx
                 || s.relativeSteeringEnabled != newRelativeMode;
             if (slotSettingsChanged)
                 settingsChanged = true;
@@ -2166,6 +2419,7 @@ void OnSimulationStep(SimulationManager @simManager, bool userCancelled)
             s.maxSteerDiff = newMaxSteerDiff;
             s.maxTimeDiff = newMaxTimeDiff;
             s.fillSteerInputs = newFill;
+            s.chancePercent = newChance;
             s.enabled = newEnabled;
             s.algorithmIndex = newAlgoIdx;
             s.relativeSteeringEnabled = newRelativeMode;
@@ -2418,6 +2672,7 @@ void OnCheckpointCountChanged(SimulationManager @simManager, int curr, int targe
         current.onCheckpointCountChanged(simManager, curr, target);
 }
 void OnRunStep(SimulationManager@ simManager){
+    ScriptingReference::OnRunStep(simManager);
     if(current !is null && current.onRunStep !is null)
         current.onRunStep(simManager);
 }

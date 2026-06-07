@@ -70,6 +70,7 @@ string HandleBfDashboard(const string &in body)
     h += "<div class='field-row'><label>Result Filename</label><input type='text' id='behFile' data-var='bf_result_filename'></div>";
     h += "<div class='field-row'><label>Iterations Before Restart</label><input type='number' id='behIter' data-var='bf_iterations_before_restart' min='0' step='1'></div>";
     h += "<div class='field-row'><label>Improvement Collection Iterations</label><input type='number' id='behCollectIter' data-var='bf_improvement_collection_iterations' min='0' step='1'></div>";
+    h += "<div class='field-row'><label>Random Seed</label><input type='number' id='behRandomSeed' data-var='bf_random_seed' min='-1' step='1'></div>";
     h += "<div class='field-row'><label>Result Folder</label><input type='text' id='behFolder' data-var='bf_result_folder'></div>";
     h += "<div class='chk-row'><input type='checkbox' id='behPersist' data-var='bf_dashboard_persist_logs'><label for='behPersist'>Persist dashboard logs to file</label></div>";
     h += "<div class='field-row full'><label>Restart Condition Script</label><textarea id='behRestartScript' data-var='bf_restart_condition_script' data-script='1' rows='3'></textarea></div>";
@@ -1585,6 +1586,7 @@ string BfDashJS_Settings()
     // Build algorithm-specific fields inside a slot body
     j += "function buildAlgoFields(body,s,si,algoId){";
     j += "var vs=si===0?'':'_'+si;";
+    j += "body.appendChild(mkFieldRow('Chance %',mkRange('bf_input_mod_chance'+vs,0,100,1),true));";
 
     // basic
     j += "if(algoId==='basic'||algoId==='relative_basic'){";
@@ -1653,6 +1655,34 @@ string BfDashJS_Settings()
     j += "body.appendChild(mkFieldRow('Max Steer Diff',mkRange('don_bf_modify_steering_max_diff'+vs,1,131072,1),true));";
     j += "return;}";
 
+    // insert
+    j += "if(algoId==='insert'){";
+    j += "body.appendChild(mkFieldRow('Time From',mkTime('bf_inputs_min_time'+vs)));";
+    j += "body.appendChild(mkFieldRow('Time To',mkTime('bf_inputs_max_time'+vs)));";
+    j += "var steer=document.createElement('div');steer.className='sub-sec';steer.appendChild(Object.assign(document.createElement('div'),{className:'sub-sec-title',textContent:'Steering Insert'}));";
+    j += "var sg=document.createElement('div');sg.className='sub-sec-grid';";
+    j += "sg.appendChild(mkFieldRow('Steer Mode',mkSelect('bf_insert_steer_mode'+vs,[{value:'range',text:'range'},{value:'add',text:'add'}])));";
+    j += "sg.appendChild(mkFieldRow('Max Count',mkNum('bf_insert_steer_count'+vs,0)));";
+    j += "sg.appendChild(mkFieldRow('Min Steer',mkNum('bf_insert_steer_min'+vs,-65536,65536)));";
+    j += "sg.appendChild(mkFieldRow('Max Steer',mkNum('bf_insert_steer_max'+vs,-65536,65536)));";
+    j += "sg.appendChild(mkFieldRow('Add Diff',mkRange('bf_insert_steer_add_diff'+vs,0,131072,1),true));";
+    j += "sg.appendChild(mkFieldRow('Max Held Time',mkTime('bf_insert_steer_hold_time'+vs)));";
+    j += "steer.appendChild(sg);body.appendChild(steer);";
+    j += "var accel=document.createElement('div');accel.className='sub-sec';accel.appendChild(Object.assign(document.createElement('div'),{className:'sub-sec-title',textContent:'Acceleration Toggle Insert'}));";
+    j += "var ag=document.createElement('div');ag.className='sub-sec-grid';ag.appendChild(mkFieldRow('Max Accel. Toggle Insert Count',mkNum('bf_insert_accel_count'+vs,0)));ag.appendChild(mkFieldRow('Max Accel. Toggle Held Time',mkTime('bf_insert_accel_hold_time'+vs)));accel.appendChild(ag);body.appendChild(accel);";
+    j += "var brake=document.createElement('div');brake.className='sub-sec';brake.appendChild(Object.assign(document.createElement('div'),{className:'sub-sec-title',textContent:'Brake Toggle Insert'}));";
+    j += "var bg=document.createElement('div');bg.className='sub-sec-grid';bg.appendChild(mkFieldRow('Max Toggle Insert Count',mkNum('bf_insert_brake_count'+vs,0)));bg.appendChild(mkFieldRow('Max Toggle Held Time',mkTime('bf_insert_brake_hold_time'+vs)));brake.appendChild(bg);body.appendChild(brake);return;}";
+
+    // delete
+    j += "if(algoId==='delete'){";
+    j += "body.appendChild(mkFieldRow('Time From',mkTime('bf_inputs_min_time'+vs)));";
+    j += "body.appendChild(mkFieldRow('Time To',mkTime('bf_inputs_max_time'+vs)));";
+    j += "var types=[{name:'Steering Delete',en:'bf_delete_steer_enabled',cnt:'bf_delete_steer_count'},";
+    j += "{name:'Acceleration Delete',en:'bf_delete_accel_enabled',cnt:'bf_delete_accel_count'},";
+    j += "{name:'Brake Delete',en:'bf_delete_brake_enabled',cnt:'bf_delete_brake_count'}];";
+    j += "for(var di=0;di<types.length;di++){var sec=document.createElement('div');sec.className='sub-sec';sec.appendChild(Object.assign(document.createElement('div'),{className:'sub-sec-title',textContent:types[di].name}));";
+    j += "var dg=document.createElement('div');dg.className='sub-sec-grid';var chk=mkCheck(types[di].en+vs,'Enabled');chk.className+=' full';dg.appendChild(chk);dg.appendChild(mkFieldRow('Max Count',mkNum(types[di].cnt+vs,0)));sec.appendChild(dg);body.appendChild(sec);}return;}";
+
     j += "}";
 
     // Update all slot field values from config
@@ -1687,6 +1717,7 @@ string BfDashJS_Settings()
     j += "function findSlotValue(s,vn,vs){";
     // Strip the suffix to get the base name
     j += "var base=vn;if(vs&&vn.endsWith(vs))base=vn.substring(0,vn.length-vs.length);";
+    j += "if(base==='bf_input_mod_chance')return s.chance;";
     j += "var maps={";
     // basic keys
     j += "'bf_modify_count':['basic','modifyCount'],";
@@ -1746,7 +1777,25 @@ string BfDashJS_Settings()
     j += "'don_bf_modify_steering_max_amount':['smooth_steering','maxAmount'],";
     j += "'don_bf_steering_modification_radius':['smooth_steering','radius'],";
     j += "'don_bf_modify_steering_min_diff':['smooth_steering','minDiff'],";
-    j += "'don_bf_modify_steering_max_diff':['smooth_steering','maxDiff']";
+    j += "'don_bf_modify_steering_max_diff':['smooth_steering','maxDiff'],";
+    // insert keys
+    j += "'bf_insert_steer_mode':['insert','steerMode'],";
+    j += "'bf_insert_steer_min':['insert','steerMin'],";
+    j += "'bf_insert_steer_max':['insert','steerMax'],";
+    j += "'bf_insert_steer_add_diff':['insert','steerAddDiff'],";
+    j += "'bf_insert_steer_count':['insert','steerCount'],";
+    j += "'bf_insert_steer_hold_time':['insert','steerHoldTime'],";
+    j += "'bf_insert_accel_count':['insert','accelCount'],";
+    j += "'bf_insert_accel_hold_time':['insert','accelHoldTime'],";
+    j += "'bf_insert_brake_count':['insert','brakeCount'],";
+    j += "'bf_insert_brake_hold_time':['insert','brakeHoldTime'],";
+    // delete keys
+    j += "'bf_delete_steer_enabled':['delete','steerEnabled'],";
+    j += "'bf_delete_steer_count':['delete','steerCount'],";
+    j += "'bf_delete_accel_enabled':['delete','accelEnabled'],";
+    j += "'bf_delete_accel_count':['delete','accelCount'],";
+    j += "'bf_delete_brake_enabled':['delete','brakeEnabled'],";
+    j += "'bf_delete_brake_count':['delete','brakeCount']";
     j += "};";
     j += "var m=maps[base];if(!m)return undefined;";
     j += "var sub=s[m[0]];if(!sub)return undefined;";
@@ -1768,6 +1817,7 @@ string BfDashJS_Settings()
     j += "serverSnapshot['bf_result_filename']=String(cfg.behavior.resultFilename);";
     j += "serverSnapshot['bf_iterations_before_restart']=String(cfg.behavior.iterationsBeforeRestart);";
     j += "serverSnapshot['bf_improvement_collection_iterations']=String(cfg.behavior.improvementCollectionIterations);";
+    j += "serverSnapshot['bf_random_seed']=String(cfg.behavior.randomSeed);";
     j += "serverSnapshot['bf_result_folder']=String(cfg.behavior.resultFolder);";
     j += "serverSnapshot['bf_restart_condition_script']=String(cfg.behavior.restartConditionScript);";
     j += "serverSnapshot['bf_dashboard_persist_logs']=String(cfg.behavior.persistLogs);}";
@@ -1784,7 +1834,8 @@ string BfDashJS_Settings()
     j += "serverSnapshot['bf_input_mod_algorithm'+vs]=sl.algorithm;";
     j += "serverSnapshot['bf_relative_input_mod_algorithm'+vs]=sl.relativeAlgorithm;";
     j += "if(si>0)serverSnapshot['bf_input_mod_enabled'+vs]=String(sl.enabled);";
-    j += "var algos=['basic','range','advanced_basic','advanced_range','smooth_steering'];";
+    j += "serverSnapshot['bf_input_mod_chance'+vs]=String(sl.chance);";
+    j += "var algos=['basic','range','advanced_basic','advanced_range','smooth_steering','insert','delete'];";
     j += "for(var ai=0;ai<algos.length;ai++){var ao=sl[algos[ai]];if(!ao)continue;var ak=Object.keys(ao);";
     j += "for(var aki=0;aki<ak.length;aki++){var varN=findVarName(algos[ai],ak[aki],vs);if(varN)serverSnapshot[varN]=String(ao[ak[aki]]);}}}}";
 
@@ -1794,7 +1845,9 @@ string BfDashJS_Settings()
     j += "'range':{'minInputCount':'bf_range_min_input_count','maxInputCount':'bf_range_max_input_count','minTime':'bf_inputs_min_time','maxTime':'bf_inputs_max_time','minSteer':'bf_range_min_steer','maxSteer':'bf_range_max_steer','maxTimeDiff':'bf_range_max_time_diff','fillSteer':'bf_range_fill_steer'},";
     j += "'advanced_basic':{'steerModifyCount':'bf_adv_steer_modify_count','steerMinTime':'bf_adv_steer_min_time','steerMaxTime':'bf_adv_steer_max_time','steerMaxDiff':'bf_adv_steer_max_diff','steerMaxTimeDiff':'bf_adv_steer_max_time_diff','steerFill':'bf_adv_steer_fill','accelModifyCount':'bf_adv_accel_modify_count','accelMinTime':'bf_adv_accel_min_time','accelMaxTime':'bf_adv_accel_max_time','accelMaxTimeDiff':'bf_adv_accel_max_time_diff','brakeModifyCount':'bf_adv_brake_modify_count','brakeMinTime':'bf_adv_brake_min_time','brakeMaxTime':'bf_adv_brake_max_time','brakeMaxTimeDiff':'bf_adv_brake_max_time_diff'},";
     j += "'advanced_range':{'steerMinInputCount':'bf_advr_steer_min_input_count','steerMaxInputCount':'bf_advr_steer_max_input_count','steerMinTime':'bf_advr_steer_min_time','steerMaxTime':'bf_advr_steer_max_time','steerMinSteer':'bf_advr_steer_min_steer','steerMaxSteer':'bf_advr_steer_max_steer','steerMinTimeDiff':'bf_advr_steer_min_time_diff','steerMaxTimeDiff':'bf_advr_steer_max_time_diff','steerFill':'bf_advr_steer_fill','accelMinInputCount':'bf_advr_accel_min_input_count','accelMaxInputCount':'bf_advr_accel_max_input_count','accelMinTime':'bf_advr_accel_min_time','accelMaxTime':'bf_advr_accel_max_time','accelMinTimeDiff':'bf_advr_accel_min_time_diff','accelMaxTimeDiff':'bf_advr_accel_max_time_diff','brakeMinInputCount':'bf_advr_brake_min_input_count','brakeMaxInputCount':'bf_advr_brake_max_input_count','brakeMinTime':'bf_advr_brake_min_time','brakeMaxTime':'bf_advr_brake_max_time','brakeMinTimeDiff':'bf_advr_brake_min_time_diff','brakeMaxTimeDiff':'bf_advr_brake_max_time_diff'},";
-    j += "'smooth_steering':{'minTime':'don_bf_modify_steering_min_time','maxTime':'don_bf_modify_steering_max_time','minAmount':'don_bf_modify_steering_min_amount','maxAmount':'don_bf_modify_steering_max_amount','radius':'don_bf_steering_modification_radius','minDiff':'don_bf_modify_steering_min_diff','maxDiff':'don_bf_modify_steering_max_diff'}};";
+    j += "'smooth_steering':{'minTime':'don_bf_modify_steering_min_time','maxTime':'don_bf_modify_steering_max_time','minAmount':'don_bf_modify_steering_min_amount','maxAmount':'don_bf_modify_steering_max_amount','radius':'don_bf_steering_modification_radius','minDiff':'don_bf_modify_steering_min_diff','maxDiff':'don_bf_modify_steering_max_diff'},";
+    j += "'insert':{'steerMode':'bf_insert_steer_mode','steerMin':'bf_insert_steer_min','steerMax':'bf_insert_steer_max','steerAddDiff':'bf_insert_steer_add_diff','steerCount':'bf_insert_steer_count','steerHoldTime':'bf_insert_steer_hold_time','accelCount':'bf_insert_accel_count','accelHoldTime':'bf_insert_accel_hold_time','brakeCount':'bf_insert_brake_count','brakeHoldTime':'bf_insert_brake_hold_time'},";
+    j += "'delete':{'steerEnabled':'bf_delete_steer_enabled','steerCount':'bf_delete_steer_count','accelEnabled':'bf_delete_accel_enabled','accelCount':'bf_delete_accel_count','brakeEnabled':'bf_delete_brake_enabled','brakeCount':'bf_delete_brake_count'}};";
     j += "var map=m[algo];if(!map||!map[key])return null;return map[key]+vs;}";
 
     // Controller badge
@@ -1819,6 +1872,7 @@ string BfDashJS_Settings()
     j += "setField(document.getElementById('behFile'),cfg.behavior.resultFilename);";
     j += "setField(document.getElementById('behIter'),cfg.behavior.iterationsBeforeRestart);";
     j += "setField(document.getElementById('behCollectIter'),cfg.behavior.improvementCollectionIterations);";
+    j += "setField(document.getElementById('behRandomSeed'),cfg.behavior.randomSeed);";
     j += "setField(document.getElementById('behFolder'),cfg.behavior.resultFolder);";
     j += "setField(document.getElementById('behPersist'),cfg.behavior.persistLogs);";
     j += "var behScript=document.getElementById('behRestartScript');";

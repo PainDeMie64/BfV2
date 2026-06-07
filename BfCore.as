@@ -73,6 +73,10 @@ void BruteforceV2Settings()
         UI::InputIntVar("Improvement collection iterations", "bf_improvement_collection_iterations", 0);
         toolTip(300, {"When above 0, accepted improvements are collected for this many iterations before the best collected run becomes the new mutation base. Set to 0 to use normal bruteforce behavior."});
         UI::Dummy(vec2(0, 2));
+        UI::InputIntVar("Random seed", "bf_random_seed", 0);
+        toolTip(300, {"Set to -1 to generate a new random seed on each bruteforce start.",
+                      "Set to a printed seed value to reproduce the same bruteforce results with the same inputs and settings."});
+        UI::Dummy(vec2(0, 2));
         UI::InputTextVar("Result files folder", "bf_result_folder");
         toolTip(300, {"Folder where the result files will be saved. Leave empty to use the root folder. Example:",
                       "'results' will save files in " + GetVariableString("scripts_folder") + "\\results\\"});
@@ -334,6 +338,7 @@ void BruteforceV2Settings()
             RegisterVariable("bf_max_time_diff" + varSuffix, 0);
             RegisterVariable("bf_inputs_fill_steer" + varSuffix, false);
             RegisterVariable("bf_input_mod_enabled" + varSuffix, true);
+            RegisterVariable("bf_input_mod_chance" + varSuffix, 100);
             RegisterVariable("bf_input_mod_algorithm" + varSuffix, "basic");
             RegisterVariable("bf_relative_input_mod_algorithm" + varSuffix, "relative_basic");
             RegisterVariable("bf_range_min_input_count" + varSuffix, 1);
@@ -384,6 +389,22 @@ void BruteforceV2Settings()
             RegisterVariable("don_bf_steering_modification_radius" + varSuffix, 0);
             RegisterVariable("don_bf_modify_steering_min_diff" + varSuffix, 1);
             RegisterVariable("don_bf_modify_steering_max_diff" + varSuffix, 10000);
+            RegisterVariable("bf_insert_steer_mode" + varSuffix, "range");
+            RegisterVariable("bf_insert_steer_min" + varSuffix, -65536);
+            RegisterVariable("bf_insert_steer_max" + varSuffix, 65536);
+            RegisterVariable("bf_insert_steer_add_diff" + varSuffix, 0);
+            RegisterVariable("bf_insert_steer_count" + varSuffix, 0);
+            RegisterVariable("bf_insert_steer_hold_time" + varSuffix, 0);
+            RegisterVariable("bf_insert_accel_count" + varSuffix, 0);
+            RegisterVariable("bf_insert_accel_hold_time" + varSuffix, 0);
+            RegisterVariable("bf_insert_brake_count" + varSuffix, 0);
+            RegisterVariable("bf_insert_brake_hold_time" + varSuffix, 0);
+            RegisterVariable("bf_delete_steer_enabled" + varSuffix, false);
+            RegisterVariable("bf_delete_steer_count" + varSuffix, 0);
+            RegisterVariable("bf_delete_accel_enabled" + varSuffix, false);
+            RegisterVariable("bf_delete_accel_count" + varSuffix, 0);
+            RegisterVariable("bf_delete_brake_enabled" + varSuffix, false);
+            RegisterVariable("bf_delete_brake_count" + varSuffix, 0);
         }
     }
     for (uint im = 0; im < g_inputModSettings.Length; im++)
@@ -425,6 +446,12 @@ void BruteforceV2Settings()
                 UI::CheckboxVar("Enabled" + suffix, "bf_input_mod_enabled" + varSuffix);
                 UI::Dummy(vec2(0, 2));
             }
+            int chance = UI::SliderIntVar("Chance %" + suffix, "bf_input_mod_chance" + varSuffix, 0, 100);
+            if (chance < 0) SetVariable("bf_input_mod_chance" + varSuffix, 0);
+            if (chance > 100) SetVariable("bf_input_mod_chance" + varSuffix, 100);
+            toolTip(300, {"Chance this input modification slot is selected during each mutation pass.",
+                          "Default 100 preserves old behavior. If no slots are selected after 10 passes, BfV2 logs a warning and runs the attempt without mutation."});
+            UI::Dummy(vec2(0, 2));
             InputModificationSettings @settings = g_inputModSettings[im];
             InputModificationAlgorithm @currentAlgo = settings.GetAlgorithm();
             string currentAlgoName = (currentAlgo !is null) ? currentAlgo.name : "Unknown";
@@ -504,5 +531,5 @@ class BruteforceEvaluation
     OnRenderCallback @onRender = null;
 }
 ;
-funcdef void InputModAlgorithmCallback(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex);
+funcdef bool InputModAlgorithmCallback(TM::InputEventBuffer @buffer, InputModificationSettings @settings, uint settingsIndex);
 funcdef void InputModAlgorithmUICallback(InputModificationSettings @settings, uint settingsIndex, const string &in suffix, const string &in varSuffix);
