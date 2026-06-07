@@ -79,6 +79,7 @@ namespace ProgressiveUberbugBf
         int raceTime = simManager.RaceTime;
         bool inWindow = raceTime >= timeFrom && raceTime <= timeTo;
         bool pastWindow = raceTime > timeTo;
+        bool conditionsMet = GlobalConditionsMet(simManager);
         PhysicsBridge::PollFast();
         if (!PhysicsBridge::IsReady())
             return StopMissingBridge();
@@ -88,7 +89,7 @@ namespace ProgressiveUberbugBf
             if (inWindow)
             {
                 ScoreSnapshot score = ScoreAtRaceTime(raceTime);
-                if (IsBetterScore(score, baselineBest))
+                if (conditionsMet && IsBetterScore(score, baselineBest))
                 {
                     baselineBest = score;
                     globalBest = score;
@@ -97,7 +98,7 @@ namespace ProgressiveUberbugBf
             else if (pastWindow && !baselineSummaryPrinted)
             {
                 ScoreSnapshot finalScore = ScoreAtRaceTime(timeTo);
-                if (IsBetterScore(finalScore, baselineBest))
+                if (conditionsMet && IsBetterScore(finalScore, baselineBest))
                 {
                     baselineBest = finalScore;
                     globalBest = finalScore;
@@ -123,12 +124,12 @@ namespace ProgressiveUberbugBf
             if (inWindow)
             {
                 ScoreSnapshot score = ScoreAtRaceTime(raceTime);
-                if (IsBetterScore(score, candidateBest))
+                if (conditionsMet && IsBetterScore(score, candidateBest))
                 {
                     candidateBest = score;
                 }
 
-                if (candidateBest.score >= globalBest.score + minScoreGain)
+                if (conditionsMet && candidateBest.score >= globalBest.score + minScoreGain)
                 {
                     globalBest = candidateBest;
                     resp.Decision = BFEvaluationDecision::Accept;
@@ -140,11 +141,11 @@ namespace ProgressiveUberbugBf
             else if (pastWindow)
             {
                 ScoreSnapshot finalScore = ScoreAtRaceTime(timeTo);
-                if (IsBetterScore(finalScore, candidateBest))
+                if (conditionsMet && IsBetterScore(finalScore, candidateBest))
                 {
                     candidateBest = finalScore;
                 }
-                if (candidateBest.score >= globalBest.score + minScoreGain)
+                if (conditionsMet && candidateBest.score >= globalBest.score + minScoreGain)
                 {
                     globalBest = candidateBest;
                     resp.Decision = BFEvaluationDecision::Accept;
