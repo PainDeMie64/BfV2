@@ -355,17 +355,20 @@ namespace ScriptingReference
                 VarRow("car.vel.yaw  /  car.velocity.yaw", "Angular velocity yaw (rad/s)");
                 VarRow("car.vel.roll  /  car.velocity.roll", "Angular velocity roll (rad/s)");
                 VarRow("car.speed", "Total speed (m/s)");
-                VarRow("car.localvel.x", "X velocity, car-relative (m/s)");
-                VarRow("car.localvel.y", "Y velocity, car-relative (m/s)");
-                VarRow("car.localvel.z", "Z velocity, car-relative (m/s)");
+                VarRow("car.localvel.x  /  car.localvelocity.x", "X velocity, car-relative (m/s)");
+                VarRow("car.localvel.y  /  car.localvelocity.y", "Y velocity, car-relative (m/s)");
+                VarRow("car.localvel.z  /  car.localvelocity.z", "Z velocity, car-relative (m/s)");
                 VarRow("car.localspeed", "Total local speed (m/s)");
                 VarRow("car.prev.vel.x  /  car.prev.velocity.x", "Previous tick X velocity, world (m/s)");
                 VarRow("car.prev.vel.y  /  car.prev.velocity.y", "Previous tick Y velocity, world (m/s)");
                 VarRow("car.prev.vel.z  /  car.prev.velocity.z", "Previous tick Z velocity, world (m/s)");
+                VarRow("car.prev.vel.pitch  /  car.prev.velocity.pitch", "Previous tick angular velocity pitch (rad/s)");
+                VarRow("car.prev.vel.yaw  /  car.prev.velocity.yaw", "Previous tick angular velocity yaw (rad/s)");
+                VarRow("car.prev.vel.roll  /  car.prev.velocity.roll", "Previous tick angular velocity roll (rad/s)");
                 VarRow("car.prev.speed", "Previous tick total speed (m/s)");
-                VarRow("car.prev.localvel.x", "Previous tick X velocity, car-relative (m/s)");
-                VarRow("car.prev.localvel.y", "Previous tick Y velocity, car-relative (m/s)");
-                VarRow("car.prev.localvel.z", "Previous tick Z velocity, car-relative (m/s)");
+                VarRow("car.prev.localvel.x  /  car.prev.localvelocity.x", "Previous tick X velocity, car-relative (m/s)");
+                VarRow("car.prev.localvel.y  /  car.prev.localvelocity.y", "Previous tick Y velocity, car-relative (m/s)");
+                VarRow("car.prev.localvel.z  /  car.prev.localvelocity.z", "Previous tick Z velocity, car-relative (m/s)");
                 VarRow("car.prev.localspeed", "Previous tick total local speed (m/s)");
                 UI::EndTable();
             }
@@ -389,11 +392,10 @@ namespace ScriptingReference
                 UI::TableSetupColumn("Description");
                 VarRow("car.freewheel", "1 if freewheeling, 0 otherwise");
                 VarRow("car.lateralcontact", "1 if lateral contact, 0 otherwise");
-                VarRow("car.sliding", "1 if sliding, 0 otherwise");
+                VarRow("car.sliding  /  car.is_sliding  /  car.is", "1 if sliding, 0 otherwise");
                 VarRow("car.gear", "Current gear (-1 = reverse)");
                 VarRow("car.rpm", "Actual engine RPM");
                 VarRow("car.turning_rate  /  car.tr", "Turning rate");
-                VarRow("car.is_sliding  /  car.is", "1 if car is sliding, 0 otherwise");
                 VarRow("car.turbo_type  /  car.tt", "0 none, 1 normal, 2 roulette");
                 VarRow("car.turbo_boost_factor  /  car.tbf", "Turbo boost factor");
                 UI::EndTable();
@@ -441,7 +443,7 @@ namespace ScriptingReference
                 VarRow("car.localvel  /  car.localvelocity", "Velocity as vec3 (car-relative)");
                 VarRow("car.prev.pos  /  car.prev.position", "Previous tick position as vec3");
                 VarRow("car.prev.vel  /  car.prev.velocity", "Previous tick velocity as vec3 (world)");
-                VarRow("car.prev.localvel", "Previous tick velocity as vec3 (car-relative)");
+                VarRow("car.prev.localvel  /  car.prev.localvelocity", "Previous tick velocity as vec3 (car-relative)");
                 VarRow("(x, y, z)", "Constant vec3 literal");
                 UI::EndTable();
             }
